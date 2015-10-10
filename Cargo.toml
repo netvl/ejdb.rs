@@ -1,0 +1,16 @@
+[package]
+name = "ejdb"
+version = "0.1.0"
+authors = ["Vladimir Matveev <vladimir.matweev@gmail.com>"]
+description = "Bindings for EJDB, and embedded JSON database"
+repository = "https://github.com/netvl/ejdb.rs"
+documentation = "https://netvl.github.io/ejdb.rs/"
+readme = "Readme.md"
+keywords = ["ejdb", "database", "ffi"]
+license = "MIT"
+
+[lib]
+name = "ejdb"
+
+[dependencies]
+ejdb-sys = { path = "ejdb-sys", version = "0.1" }
