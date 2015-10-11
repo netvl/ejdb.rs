@@ -182,6 +182,7 @@ impl Default for CollectionOptions {
 pub struct Collection<'a>(*mut ejdb_sys::EJCOLL, PhantomData<&'a Database>);
 
 impl<'a> Collection<'a> {
+    // TODO: use ejdbmeta
     pub fn name(&self) -> String {
         fn get_coll_name(coll: *mut ejdb_sys::EJCOLL) -> (*const u8, usize) {
             #[repr(C)]
