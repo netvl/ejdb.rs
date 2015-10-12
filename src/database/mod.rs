@@ -1,14 +1,15 @@
 use std::ffi::{CStr, CString};
 use std::str;
 use std::slice;
-use std::marker::PhantomData;
 
 use libc::{c_int, c_char};
 
 use ejdb_sys;
+use bson::{self, oid};
 
 use self::open_mode::OpenMode;
 use utils::TCList;
+use ejdb_bson::{EjdbBsonDocument, EjdbObjectId};
 use Result;
 
 pub mod open_mode {
@@ -95,7 +96,7 @@ impl Database {
         let list: TCList<ejdb_sys::EJCOLL> = unsafe { TCList::from_ptr(list) };
 
         Ok(list.iter()
-            .map(|c| Collection(c, PhantomData))
+            .map(|c| Collection { coll: c, db: self })
             .map(|c| c.name())
             .collect())
     }
@@ -109,7 +110,7 @@ impl Database {
                 Some(msg) => Err(msg.into())
             }
         } else {
-            Ok(Some(Collection(coll, PhantomData)))
+            Ok(Some(Collection { coll: coll, db: self }))
         }
     }
 
@@ -125,7 +126,7 @@ impl Database {
         if coll.is_null() {
             self.last_error("cannot create or open a collection")
         } else {
-            Ok(Collection(coll, PhantomData))
+            Ok(Collection { coll: coll, db: self })
         }
     }
 
@@ -179,9 +180,12 @@ impl Default for CollectionOptions {
     }
 }
 
-pub struct Collection<'a>(*mut ejdb_sys::EJCOLL, PhantomData<&'a Database>);
+pub struct Collection<'db> {
+    coll: *mut ejdb_sys::EJCOLL,
+    db: &'db Database
+}
 
-impl<'a> Collection<'a> {
+impl<'db> Collection<'db> {
     // TODO: use ejdbmeta
     pub fn name(&self) -> String {
         fn get_coll_name(coll: *mut ejdb_sys::EJCOLL) -> (*const u8, usize) {
@@ -197,9 +201,116 @@ impl<'a> Collection<'a> {
             }
         }
 
-        let (data, size) = get_coll_name(self.0);
+        let (data, size) = get_coll_name(self.coll);
         let bytes = unsafe { slice::from_raw_parts(data, size) };
         // XXX: should be safe, but need to check
         unsafe { str::from_utf8_unchecked(bytes).to_owned() }
     }
+
+    #[inline]
+    pub fn begin(&self) -> Result<Transaction> { Transaction::new(self) }
+
+    pub fn transaction_active(&self) -> Result<bool> {
+        let mut result = 0;
+        if unsafe { ejdb_sys::ejdbtranstatus(self.coll, &mut result) != 0 } {
+            Ok(result != 0)
+        } else {
+            self.db.last_error("error getting transaction status")
+        }
+    }
+
+    pub fn save(&self, doc: bson::Document) -> Result<oid::ObjectId> {
+        let mut ejdb_doc = try!(EjdbBsonDocument::from_bson(&doc));
+        let mut out_id = EjdbObjectId::empty();
+
+        if unsafe { ejdb_sys::ejdbsavebson(self.coll, ejdb_doc.as_raw_mut(), out_id.as_raw_mut()) != 0 } {
+            Ok(out_id.into())
+        } else {
+            self.db.last_error("error saving BSON document")
+        }
+    }
+
+    pub fn load(&self, id: oid::ObjectId) -> Result<Option<bson::Document>> {
+        let ejdb_oid: EjdbObjectId = id.into();
+        let result = unsafe { ejdb_sys::ejdbloadbson(self.coll, ejdb_oid.as_raw()) };
+        if result.is_null() {
+            if self.db.last_error_msg().is_none() { Ok(None) }
+            else { self.db.last_error("error loading BSON document") }
+        } else {
+            unsafe {
+                EjdbBsonDocument::from_ptr(result).to_bson().map(Some).map_err(|e| e.into())
+            }
+        }
+    }
+}
+
+pub struct Transaction<'coll, 'db: 'coll> {
+    coll: &'coll Collection<'db>,
+    commit: bool,
+    finished: bool
+}
+
+impl<'coll, 'db> Drop for Transaction<'coll, 'db> {
+    fn drop(&mut self) {
+        let _ = self.finish_mut();  // ignore the result
+    }
+}
+
+impl<'coll, 'db> Transaction<'coll, 'db> {
+    fn new(coll: &'coll Collection<'db>) -> Result<Transaction<'coll, 'db>> {
+        if unsafe { ejdb_sys::ejdbtranbegin(coll.coll) != 0 } {
+            coll.db.last_error("error opening transaction")
+        } else {
+            Ok(Transaction { coll: coll, commit: false, finished: false })
+        }
+    }
+
+    #[inline]
+    pub fn will_commit(&self) -> bool { self.commit }
+
+    #[inline]
+    pub fn will_abort(&self) -> bool { !self.commit }
+
+    #[inline]
+    pub fn set_commit(&mut self) { self.commit = true; }
+
+    #[inline]
+    pub fn set_abort(&mut self) { self.commit = false; }
+
+    #[inline]
+    pub fn finish(mut self) -> Result<()> { self.finish_mut() }
+
+    #[inline]
+    pub fn commit(mut self) -> Result<()> { self.commit_mut() }
+
+    #[inline]
+    pub fn abort(mut self) -> Result<()> { self.abort_mut() }
+
+    fn finish_mut(&mut self) -> Result<()> {
+        if self.finished { Ok(()) }
+        else { if self.commit { self.commit_mut() } else { self.abort_mut() } }
+    }
+
+    fn commit_mut(&mut self) -> Result<()> {
+        self.finished = true;
+        if unsafe { ejdb_sys::ejdbtrancommit(self.coll.coll) != 0 } { Ok(()) }
+        else { self.coll.db.last_error("error commiting transaction") }
+    }
+
+    fn abort_mut(&mut self) -> Result<()> {
+        self.finished = true;
+        if unsafe { ejdb_sys::ejdbtranabort(self.coll.coll) != 0 } { Ok(()) }
+        else { self.coll.db.last_error("error aborting transaction") }
+    }
+}
+
+#[test]
+fn test_save() {
+    let mut db = Database::open("/tmp/test_database", OpenMode::default()).unwrap();
+    let mut coll = db.get_or_create_collection("example_collection", CollectionOptions::default()).unwrap();
+
+    let mut doc = bson::Document::new();
+    doc.insert("name".to_owned(), bson::Bson::String("Me".into()));
+    doc.insert("age".to_owned(), bson::Bson::FloatingPoint(23.8));
+    coll.save(doc).unwrap();
 }

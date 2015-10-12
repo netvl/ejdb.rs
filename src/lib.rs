@@ -6,7 +6,7 @@ extern crate bson;
 extern crate ejdb_sys;
 extern crate libc;
 
-pub use database::{Database, Collection, CollectionOptions};
+pub use database::{Database, Collection, CollectionOptions, Transaction};
 pub use database::open_mode::{self, OpenMode};
 pub use ejdb_bson::EjdbBsonDocument;
 pub use types::*;
