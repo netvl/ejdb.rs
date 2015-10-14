@@ -8,9 +8,11 @@ use ejdb_sys;
 use bson::{self, oid};
 
 use self::open_mode::OpenMode;
-use utils::TCList;
+use utils::tclist::TCList;
 use ejdb_bson::{EjdbBsonDocument, EjdbObjectId};
 use Result;
+
+pub mod query;
 
 pub mod open_mode {
     use ejdb_sys;
@@ -219,8 +221,8 @@ impl<'db> Collection<'db> {
         }
     }
 
-    pub fn save(&self, doc: bson::Document) -> Result<oid::ObjectId> {
-        let mut ejdb_doc = try!(EjdbBsonDocument::from_bson(&doc));
+    pub fn save(&self, doc: &bson::Document) -> Result<oid::ObjectId> {
+        let mut ejdb_doc = try!(EjdbBsonDocument::from_bson(doc));
         let mut out_id = EjdbObjectId::empty();
 
         if unsafe { ejdb_sys::ejdbsavebson(self.coll, ejdb_doc.as_raw_mut(), out_id.as_raw_mut()) != 0 } {
@@ -241,6 +243,15 @@ impl<'db> Collection<'db> {
                 EjdbBsonDocument::from_ptr(result).to_bson().map(Some).map_err(|e| e.into())
             }
         }
+    }
+
+    pub fn save_all<'a, I>(&self, docs: I) -> Result<Vec<oid::ObjectId>>
+            where I: IntoIterator<Item=&'a bson::Document> {
+        let mut result = Vec::new();
+        for doc in docs {
+            result.push(try!(self.save(doc)));
+        }
+        Ok(result)
     }
 }
 
