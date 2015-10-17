@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use bson::{Bson, Document};
 
 use utils::bson::DocumentBuilder;
@@ -123,7 +125,7 @@ impl Query {
 
     #[inline]
     pub fn field<S: Into<String>>(self, name: S) -> FieldConstraint {
-        FieldConstraint(name.into(), self)
+        FieldConstraint(name.into().into(), FieldConstraintData::Root(self))
     }
 
     #[inline]
@@ -132,24 +134,72 @@ impl Query {
     }
 }
 
-pub struct FieldConstraint(String, Query);
+pub enum FieldConstraintData {
+    Root(Query),
+    Child(Box<FieldConstraint>)
+}
+
+pub struct FieldConstraint(Cow<'static, str>, FieldConstraintData);
 
 impl FieldConstraint {
-    pub fn eq<V: Into<Bson>>(mut self, value: V) -> Query {
-        self.1.query.insert(self.0, value);
-        self.1
+    fn process<T: Into<Bson>>(self, value: T) -> Query {
+        match self.1 {
+            FieldConstraintData::Root(mut q) => {
+                q.query.insert(self.0.into_owned(), value);
+                q
+            }
+            FieldConstraintData::Child(fc) => {
+                fc.process(ndb().set(self.0.into_owned(), value))
+            }
+        }
     }
 
-    pub fn begin<S: Into<String>>(mut self, value: S) -> Query {
-        self.1.query.insert(self.0, DocumentBuilder::new().set("$begin", value.into()));
-        self.1
+    pub fn field<S: Into<String>>(self, name: S) -> FieldConstraint {
+        FieldConstraint(name.into().into(), FieldConstraintData::Child(Box::new(self)))
+    }
+
+    pub fn eq<V: Into<Bson>>(self, value: V) -> Query {
+        self.process(value)
+    }
+
+    pub fn begin<S: Into<String>>(self, value: S) -> Query {
+        self.process(ndb().set("$begin", value.into()))
     }
 
     // TODO: add between, gt, gte, lt, lte operators for numbers
 
-    pub fn exists(mut self, exists: bool) -> Query {
-        self.1.query.insert(self.0, ndb().set("$exists", exists));
-        self.1
+    pub fn exists(self, exists: bool) -> Query {
+        self.process(ndb().set("$exists", exists))
+    }
+
+    pub fn contained_in<V: Into<Vec<Bson>>>(self, input: V) -> Query {
+        self.process(ndb().set("$in", input.into()))
+    }
+
+    pub fn not_in<V: Into<Vec<Bson>>>(self, input: V) -> Query {
+        self.process(ndb().set("$nin", input.into()))
+    }
+
+    pub fn icase(self) -> FieldConstraint {
+        FieldConstraint("$icase".into(), FieldConstraintData::Child(Box::new(self)))
+    }
+
+    pub fn not(self) -> FieldConstraint {
+        FieldConstraint("$not".into(), FieldConstraintData::Child(Box::new(self)))
+    }
+
+    pub fn str_and<S: Into<String>, V: IntoIterator<Item=S>>(self, values: V) -> Query {
+        self.process(ndb()
+            .set("$strand", values.into_iter()
+                .map(|v| v.into().into())  // S -> String -> Bson
+                .collect::<Vec<Bson>>()))
+    }
+
+    pub fn str_or<S: Into<String>, V: IntoIterator<Item=S>>(self, values: V) -> Query {
+        self.process(ndb()
+            .set("$stror", values.into_iter()
+                .map(|v| v.into().into())  // S -> String -> Bson
+                .collect::<Vec<Bson>>()))
     }
 }
 
