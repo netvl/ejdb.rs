@@ -13,6 +13,8 @@ pub use ejdb_bson::EjdbBsonDocument;
 pub use types::*;
 pub use utils::bson::DocumentBuilder;
 
+#[macro_use]
+mod macros;
 mod database;
 mod ejdb_bson;
 mod types;

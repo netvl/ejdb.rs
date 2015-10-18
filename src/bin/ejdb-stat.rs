@@ -3,7 +3,7 @@ extern crate ejdb;
 use std::env;
 use std::io::Write;
 
-use ejdb::{Database, Collection, OpenMode};
+use ejdb::{Database, OpenMode};
 
 macro_rules! abort {
     ($code:expr, $($args:tt)*) => {{

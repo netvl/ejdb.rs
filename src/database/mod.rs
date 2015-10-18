@@ -316,12 +316,13 @@ impl<'coll, 'db> Transaction<'coll, 'db> {
 }
 
 #[test]
+#[ignore]
 fn test_save() {
-    let mut db = Database::open("/tmp/test_database", OpenMode::default()).unwrap();
-    let mut coll = db.get_or_create_collection("example_collection", CollectionOptions::default()).unwrap();
+    let db = Database::open("/tmp/test_database", OpenMode::default()).unwrap();
+    let coll = db.get_or_create_collection("example_collection", CollectionOptions::default()).unwrap();
 
     let mut doc = bson::Document::new();
     doc.insert("name".to_owned(), bson::Bson::String("Me".into()));
     doc.insert("age".to_owned(), bson::Bson::FloatingPoint(23.8));
-    coll.save(doc).unwrap();
+    coll.save(&doc).unwrap();
 }
