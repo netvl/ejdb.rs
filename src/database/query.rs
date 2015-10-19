@@ -310,6 +310,16 @@ impl Query {
     }
 }
 
+impl From<Document> for Query {
+    #[inline]
+    fn from(document: Document) -> Query {
+        Query {
+            query: document,
+            hints: QueryHints::new()
+        }
+    }
+}
+
 impl Into<Document> for Query {
     #[inline]
     fn into(self) -> Document { self.query }

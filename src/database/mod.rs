@@ -1,6 +1,7 @@
 use std::ffi::{CStr, CString};
 use std::str;
 use std::slice;
+use std::io;
 
 use libc::{c_int, c_char};
 
@@ -259,7 +260,50 @@ impl<'db> Collection<'db> {
         }
         Ok(result)
     }
+
+    #[inline]
+    pub fn query<D: Into<query::Query>>(&self, query: D) -> Query {
+        Query {
+            coll: self,
+            query: query.into(),
+            log_out: None
+        }
+    }
 }
+
+pub struct Query<'coll, 'db: 'coll, 'out> {
+    coll: &'coll Collection<'db>,
+    query: query::Query,
+    log_out: Option<&'out mut io::Write>
+}
+
+impl<'coll, 'db, 'out> Query<'coll, 'db, 'out> {
+    pub fn log_output<'o>(self, target: &'o mut (io::Write + 'o)) -> Query<'coll, 'db, 'o> {
+        Query {
+            coll: self.coll,
+            query: self.query,
+            log_out: Some(target)
+        }
+    }
+
+    pub fn count(self) -> Result<u32> {
+        unimplemented!()
+    }
+
+    pub fn update(self) -> Result<u32> {
+        unimplemented!()
+    }
+
+    pub fn find_one(self) -> Result<bson::Document> {
+        unimplemented!()
+    }
+
+    pub fn find(self) -> Result<QueryResult> {
+        unimplemented!()
+    }
+}
+
+pub struct QueryResult;
 
 pub struct Transaction<'coll, 'db: 'coll> {
     coll: &'coll Collection<'db>,
