@@ -3,6 +3,7 @@ extern crate bitflags;
 #[macro_use]
 extern crate error_type;
 extern crate bson;
+extern crate itertools;
 extern crate ejdb_sys;
 extern crate libc;
 

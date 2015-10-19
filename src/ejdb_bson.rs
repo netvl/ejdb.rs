@@ -9,7 +9,7 @@ pub struct EjdbBsonDocument(*mut ejdb_sys::bson);
 impl EjdbBsonDocument {
     pub fn empty() -> EjdbBsonDocument {
         unsafe {
-            // TODO: check for alloc errors
+            // TODO: check for alloc errors properly
             let bson_ptr = ejdb_sys::bson_create();
             if bson_ptr.is_null() {
                 panic!("Cannot allocate new BSON document");

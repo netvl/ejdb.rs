@@ -10,7 +10,7 @@ use bson::{self, oid};
 use self::open_mode::OpenMode;
 use utils::tclist::TCList;
 use ejdb_bson::{EjdbBsonDocument, EjdbObjectId};
-use Result;
+use {Error, Result, PartialSave};
 
 pub mod query;
 
@@ -249,7 +249,13 @@ impl<'db> Collection<'db> {
             where I: IntoIterator<Item=&'a bson::Document> {
         let mut result = Vec::new();
         for doc in docs {
-            result.push(try!(self.save(doc)));
+            match self.save(doc) {
+                Ok(id) => result.push(id),
+                Err(e) => return Err(Error::PartialSave(PartialSave {
+                    cause: Box::new(e),
+                    successful_ids: result
+                }))
+            }
         }
         Ok(result)
     }
