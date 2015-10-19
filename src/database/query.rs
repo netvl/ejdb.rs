@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use bson::{Bson, Document};
 
-use utils::bson::{DocumentBuilder, BsonNumber};
+use utils::bson::BsonNumber;
 
 pub struct QueryHints {
     max: Option<i64>,
@@ -156,38 +156,66 @@ impl Query {
     }
 
     pub fn join<S: Into<String>, C: Into<String>>(self, key: S, coll: C) -> Query {
-        self.merge_or_add_to_document("$do", key, ndb().set("$join", coll.into()))
+        self.add_subkey_at_key("$do", key, bson!("$join" => (coll.into())))
     }
 
-    fn merge_or_add_to_document<S: Into<String>, V: Into<Bson>>(mut self, key: &str, subkey: S, value: V) -> Query {
+    fn modify_document_at_key<K, F1, F2, V>(mut self, key: K, value: V,
+                                            on_document: F1, on_something_else: F2) -> Query
+        where K: Into<String> + AsRef<str>,
+              F1: FnOnce(&mut Document, V),     // Document is value at key K
+              F2: FnOnce(&mut Document, K, V),  // Document is the query itself
+    {
         // unsafe is to overcome non-lexical borrow issues (and entry API is not available)
-        let r = self.query.get_mut(key).map(|p| unsafe { &mut *(p as *mut _) });
+        let r = self.query.get_mut(key.as_ref()).map(|p| unsafe { &mut *(p as *mut _) });
         if let Some(&mut Bson::Document(ref mut d)) = r {
-            d.insert(subkey, value);
+            on_document(d, value);
         } else {
-            self.query.insert(key, ndb().set(subkey, value));
+            on_something_else(&mut self.query, key, value);
         }
 
         self
     }
 
+    fn add_subkey_at_key<K, S, V>(self, key: K, subkey: S, value: V) -> Query
+        where K: Into<String> + AsRef<str>,
+              S: Into<String>,
+              V: Into<Bson>
+    {
+        self.modify_document_at_key(
+            key, (subkey, value),
+            |d, (s, v)| { d.insert(s, v); },
+            |q, k, (s, v)| { q.insert(k.into(), bson! { s.into() => (v.into()) }); }
+        )
+    }
+
+    fn merge_documents_at_key<K, D>(self, key: K, document: D) -> Query
+        where K: Into<String> + AsRef<str>,
+              D: Into<Document>
+    {
+        self.modify_document_at_key(
+            key, document,
+            |d, v| { for (k, v) in v.into() { d.insert(k, v); } },
+            |q, k, v| { q.insert(k.into(), v.into()); }
+        )
+    }
+
     pub fn add_to_set<S: Into<String>, V: Into<Bson>>(self, key: S, value: V) -> Query {
-        self.merge_or_add_to_document("$addToSet", key, value)
+        self.add_subkey_at_key("$addToSet", key, value)
     }
 
     pub fn add_to_set_all<S, I, V>(self, key: S, values: I) -> Query
             where S: Into<String>, V: Into<Bson>, I: IntoIterator<Item=V>
     {
         let values: Vec<_> = values.into_iter().map(V::into).collect();
-        self.merge_or_add_to_document("$addToSet", key, values)
+        self.add_subkey_at_key("$addToSet", key, values)
     }
 
     pub fn unset<S: Into<String>>(self, key: S) -> Query {
-        self.merge_or_add_to_document("$unset", key, "")
+        self.add_subkey_at_key("$unset", key, "")
     }
 
     pub fn inc<S: Into<String>, D: BsonNumber>(self, key: S, delta: D) -> Query {
-        self.merge_or_add_to_document("$inc", key, delta.to_bson())
+        self.add_subkey_at_key("$inc", key, delta.to_bson())
     }
 
     pub fn drop_all(mut self) -> Query {
@@ -201,11 +229,11 @@ impl Query {
     }
 
     pub fn upsert_field<S: Into<String>, V: Into<Bson>>(self, key: S, value: V) -> Query {
-        self.merge_or_add_to_document("$upsert", key, value)
+        self.add_subkey_at_key("$upsert", key, value)
     }
 
     pub fn set<S: Into<String>, V: Into<Bson>>(self, key: S, value: V) -> Query {
-        self.merge_or_add_to_document("$set", key, value)
+        self.add_subkey_at_key("$set", key, value)
     }
 
     pub fn set_many<D: Into<Document>>(mut self, document: D) -> Query {
@@ -214,38 +242,38 @@ impl Query {
     }
 
     pub fn pull<S: Into<String>, V: Into<Bson>>(self, key: S, value: V) -> Query {
-        self.merge_or_add_to_document("$pull", key, value)
+        self.add_subkey_at_key("$pull", key, value)
     }
 
     pub fn pull_all<S, I, V>(self, key: S, values: I) -> Query
             where S: Into<String>, V: Into<Bson>, I: IntoIterator<Item=V>
     {
         let values: Vec<_> = values.into_iter().map(V::into).collect();
-        self.merge_or_add_to_document("$pullAll", key, values)
+        self.add_subkey_at_key("$pullAll", key, values)
     }
 
     pub fn push<S: Into<String>, V: Into<Bson>>(self, key: S, value: V) -> Query {
-        self.merge_or_add_to_document("$push", key, value)
+        self.add_subkey_at_key("$push", key, value)
     }
 
     pub fn push_all<S, I, V>(self, key: S, values: I) -> Query
             where S: Into<String>, V: Into<Bson>, I: IntoIterator<Item=V>
     {
         let values: Vec<_> = values.into_iter().map(V::into).collect();
-        self.merge_or_add_to_document("$pushAll", key, values)
+        self.add_subkey_at_key("$pushAll", key, values)
     }
 
     pub fn rename<S1: Into<String>, S2: Into<String>>(self, key: S1, new_key: S2) -> Query {
-        self.merge_or_add_to_document("$rename", key, new_key.into())
+        self.add_subkey_at_key("$rename", key, new_key.into())
     }
 
     pub fn slice<S: Into<String>>(self, key: S, limit: i64) -> Query {
-        self.merge_or_add_to_document("$do", key, ndb().set("$slice", limit))
+        self.add_subkey_at_key("$do", key, bson!("$slice" => limit))
     }
 
     pub fn slice_with_offset<S: Into<String>>(self, key: S, offset: i64, limit: i64) -> Query {
-        self.merge_or_add_to_document(
-            "$do", key, ndb().set("$slice", vec![offset.to_bson(), limit.to_bson()])
+        self.add_subkey_at_key(
+            "$do", key, bson!("$slice" => [ (offset.to_bson()), (limit.to_bson()) ])
         )
     }
 
@@ -271,11 +299,16 @@ impl FieldConstraint {
     fn process<T: Into<Bson>>(self, value: T) -> Query {
         match self.1 {
             FieldConstraintData::Root(mut q) => {
-                q.query.insert(self.0.into_owned(), value);
-                q
+                match value.into() {
+                    Bson::Document(doc) => q.merge_documents_at_key(self.0.into_owned(), doc),
+                    value => {
+                        q.query.insert(self.0.into_owned(), value);
+                        q
+                    }
+                }
             }
             FieldConstraintData::Child(fc) => {
-                fc.process(ndb().set(self.0.into_owned(), value))
+                fc.process(bson!((self.0.into_owned()) => (value.into())))
             }
         }
     }
@@ -289,44 +322,44 @@ impl FieldConstraint {
     }
 
     pub fn begin<S: Into<String>>(self, value: S) -> Query {
-        self.process(ndb().set("$begin", value.into()))
+        self.process(bson!("$begin" => (value.into())))
     }
 
     // TODO: add between, gt, gte, lt, lte operators for numbers
     pub fn between<N1: BsonNumber, N2: BsonNumber>(self, left: N1, right: N2) -> Query {
-        self.process(ndb().set("$bt", vec![left.to_bson(), right.to_bson()]))
+        self.process(bson!("$bt" => [ (left.to_bson()), (right.to_bson()) ]))
     }
 
     pub fn gt<N: BsonNumber>(self, value: N) -> Query {
-        self.process(ndb().set("$gt", value.to_bson()))
+        self.process(bson!("$gt" => (value.to_bson())))
     }
 
     pub fn gte<N: BsonNumber>(self, value: N) -> Query {
-        self.process(ndb().set("$gte", value.to_bson()))
+        self.process(bson!("$gte" => (value.to_bson())))
     }
 
     pub fn lt<N: BsonNumber>(self, value: N) -> Query {
-        self.process(ndb().set("$lt", value.to_bson()))
+        self.process(bson!("$lt" => (value.to_bson())))
     }
 
     pub fn lte<N: BsonNumber>(self, value: N) -> Query {
-        self.process(ndb().set("$lte", value.to_bson()))
+        self.process(bson!("$lte" => (value.to_bson())))
     }
 
     pub fn exists(self, exists: bool) -> Query {
-        self.process(ndb().set("$exists", exists))
+        self.process(bson!("$exists" => exists))
     }
 
     pub fn elem_match<Q: Into<Document>>(self, query: Q) -> Query {
-        self.process(ndb().set("$elemMatch", query.into()))
+        self.process(bson!("$elemMatch" => (query.into())))
     }
 
     pub fn contained_in<V: Into<Bson>, I: IntoIterator<Item=V>>(self, values: I) -> Query {
-        self.process(ndb().set("$in", values.into_iter().map(V::into).collect::<Vec<_>>()))
+        self.process(bson!("$in" => (values.into_iter().map(V::into).collect::<Vec<_>>())))
     }
 
     pub fn not_contained_in<V: Into<Bson>, I: IntoIterator<Item=V>>(self, values: I) -> Query {
-        self.process(ndb().set("$nin", values.into_iter().map(V::into).collect::<Vec<_>>()))
+        self.process(bson!("$nin" => (values.into_iter().map(V::into).collect::<Vec<_>>())))
     }
 
     pub fn case_insensitive(self) -> FieldConstraint {
@@ -338,30 +371,31 @@ impl FieldConstraint {
     }
 
     pub fn str_and<S: Into<String>, V: IntoIterator<Item=S>>(self, values: V) -> Query {
-        self.process(
-            ndb().set("$strand", values.into_iter()
-                .map(|v| v.into().into())  // S -> String -> Bson
-                .collect::<Vec<Bson>>())
-        )
+        self.process(bson! {
+            "$strand" => (
+                values.into_iter().map(|v| v.into().into())  // S -> String -> Bson
+                    .collect::<Vec<Bson>>()
+            )
+        })
     }
 
     pub fn str_or<S: Into<String>, V: IntoIterator<Item=S>>(self, values: V) -> Query {
-        self.process(
-            ndb().set("$stror", values.into_iter()
-                .map(|v| v.into().into())  // S -> String -> Bson
-                .collect::<Vec<Bson>>())
-        )
+        self.process(bson! {
+            "$stror" => (
+                values.into_iter().map(|v| v.into().into())  // S -> String -> Bson
+                    .collect::<Vec<Bson>>()
+            )
+        })
     }
 }
-
-#[inline(always)]
-fn ndb() -> DocumentBuilder { DocumentBuilder::new() }
 
 #[inline(always)]
 pub fn query() -> Query { Query::new() }
 
 #[cfg(test)]
 mod tests {
+    use bson::oid::ObjectId;
+
     use super::*;
 
     #[test]
@@ -554,6 +588,157 @@ mod tests {
             "$do" => {
                 "array" => { "$slice" => 123i64 },
                 "array_2" => { "$slice" => [ 456i64, 789i64 ] }
+            }
+        });
+    }
+
+    #[test]
+    fn test_field_field() {
+        let q = query().field("a").field("b").field("c").eq(12345);
+        assert_eq!(q.query, bson! {
+            "a" => { "b" => { "c" => 12345 } }
+        });
+    }
+
+    #[test]
+    fn test_field_eq() {
+        let q = query().field("_id").eq(ObjectId::with_timestamp(128));
+        assert_eq!(q.query, bson! {
+            "_id" => (ObjectId::with_timestamp(128))
+        });
+    }
+
+    #[test]
+    fn test_field_begin() {
+        let q = query().field("name").begin("something");
+        assert_eq!(q.query, bson! {
+            "name" => {
+                "$begin" => "something"
+            }
+        });
+    }
+
+    #[test]
+    fn test_field_between() {
+        let q = query().field("x").between(0.1, 123i64);
+        assert_eq!(q.query, bson! {
+            "x" => {
+                "$bt" => [ 0.1, 123i64 ]
+            }
+        });
+    }
+
+    #[test]
+    fn test_field_gt_lt() {
+        let q = query()
+            .field("x").gt(0.1)
+            .field("x").lt(9.9);
+        assert_eq!(q.query, bson! {
+            "x" => {
+                "$gt" => 0.1,
+                "$lt" => 9.9
+            }
+        });
+    }
+
+    #[test]
+    fn test_field_gte_lte() {
+        let q = query()
+            .field("y").gte(1)
+            .field("y").lte(99);
+        assert_eq!(q.query, bson! {
+            "y" => {
+                "$gte" => 1,
+                "$lte" => 99
+            }
+        });
+    }
+
+    #[test]
+    fn test_field_exists() {
+        let q = query()
+            .field("name").exists(true)
+            .field("wat").exists(false);
+        assert_eq!(q.query, bson! {
+            "name" => { "$exists" => true },
+            "wat" => { "$exists" => false }
+        });
+    }
+
+    #[test]
+    fn test_field_elem_match() {
+        let q = query()
+            .field("props").elem_match(bson! { "a" => 1, "b" => "c" });
+        assert_eq!(q.query, bson! {
+            "props" => {
+                "$elemMatch" => {
+                    "a" => 1,
+                    "b" => "c"
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn test_contained_in() {
+        let q = query()
+            .field("x").contained_in(vec![1, 2, 3])
+            .field("y").not_contained_in(vec![7, 8, 9]);
+        assert_eq!(q.query, bson! {
+            "x" => {
+                "$in" => [1, 2, 3]
+            },
+            "y" => {
+                "$nin" => [7, 8, 9]
+            }
+        });
+    }
+
+    #[test]
+    fn test_case_insensitive() {
+        let q = query()
+            .field("msg").case_insensitive().eq("hello world")
+            .field("err").case_insensitive().contained_in(vec!["whatever", "pfff"]);
+        assert_eq!(q.query, bson! {
+            "msg" => {
+                "$icase" => "hello world"
+            },
+            "err" => {
+                "$icase" => {
+                    "$in" => [ "whatever", "pfff" ]
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn test_not() {
+        let q = query()
+            .field("x").not().eq(42)
+            .field("y").not().between(10.0, 20.32);
+        assert_eq!(q.query, bson! {
+            "x" => {
+                "$not" => 42
+            },
+            "y" => {
+                "$not" => {
+                    "$bt" => [ 10.0, 20.32 ]
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn test_strand_stror() {
+        let q = query()
+            .field("name").str_and(["me", "xyzzy", "wab"].iter().cloned())
+            .field("title").str_or(["foo", "bar", "baz"].iter().cloned());
+        assert_eq!(q.query, bson! {
+            "name" => {
+                "$strand" => [ "me", "xyzzy", "wab" ]
+            },
+            "title" => {
+                "$stror" => [ "foo", "bar", "baz" ]
             }
         });
     }
