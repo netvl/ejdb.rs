@@ -5,32 +5,24 @@ use bson::{Bson, Document};
 use utils::bson::BsonNumber;
 
 pub struct QueryHints {
-    max: Option<i64>,
-    skip: Option<i64>,
-    order_by: Vec<(String, i32)>,
-    fields: Vec<(String, i32)>
+    hints: Document
 }
 
 impl QueryHints {
     #[inline]
     pub fn new() -> QueryHints {
-        QueryHints {
-            max: None,
-            skip: None,
-            order_by: Vec::new(),
-            fields: Vec::new()
-        }
+        QueryHints { hints: Document::new() }
     }
 
     #[inline]
     pub fn max(mut self, n: i64) -> QueryHints {
-        self.max = Some(n);
+        self.hints.insert("$max", n);
         self
     }
 
     #[inline]
     pub fn skip(mut self, n: i64) -> QueryHints {
-        self.skip = Some(n);
+        self.hints.insert("$skip", n);
         self
     }
 
@@ -43,69 +35,63 @@ impl QueryHints {
     pub fn field<S: Into<String>>(self, field: S) -> QueryHintsField {
         QueryHintsField(self, field.into())
     }
+
+    fn add_hint(&mut self, key: &str, subkey: String, value: i32) {
+        if !self.hints.contains_key(key) {
+            self.hints.insert(key, bson! { subkey => value });
+        } else {
+            match self.hints.get_mut(key) {
+                Some(&mut Bson::Document(ref mut doc)) => {
+                    doc.insert(subkey, value);
+                }
+                _ => unreachable!()
+            }
+        }
+    }
 }
 
 pub struct QueryHintsOrderBy(QueryHints, String);
 
 impl QueryHintsOrderBy {
-    #[inline]
-    pub fn desc(mut self) -> QueryHints {
-        self.0.order_by.push((self.1, -1));
+    fn add_hint(mut self, value: i32) -> QueryHints {
+        self.0.add_hint("$orderBy", self.1, value);
         self.0
     }
 
     #[inline]
-    pub fn asc(mut self) -> QueryHints {
-        self.0.order_by.push((self.1, 1));
-        self.0
+    pub fn desc(self) -> QueryHints {
+        self.add_hint(-1)
+    }
+
+    #[inline]
+    pub fn asc(self) -> QueryHints {
+        self.add_hint(1)
     }
 }
 
 pub struct QueryHintsField(QueryHints, String);
 
 impl QueryHintsField {
-    #[inline]
-    pub fn exclude(mut self) -> QueryHints {
-        self.0.fields.push((self.1, -1));
+    pub fn add_hint(mut self, value: i32) -> QueryHints {
+        self.0.add_hint("$fields", self.1, value);
         self.0
     }
 
     #[inline]
-    pub fn include(mut self) -> QueryHints {
-        self.0.fields.push((self.1, 1));
-        self.0
+    pub fn exclude(self) -> QueryHints {
+        self.add_hint(-1)
+    }
+
+    #[inline]
+    pub fn include(self) -> QueryHints {
+        self.add_hint(1)
     }
 }
 
 impl Into<Document> for QueryHints {
+    #[inline]
     fn into(self) -> Document {
-        let mut doc = Document::new();
-
-        if let Some(n) = self.max {
-            doc.insert("$max", n);
-        }
-
-        if let Some(n) = self.skip {
-            doc.insert("$skip", n);
-        }
-
-        if !self.order_by.is_empty() {
-            let mut order_by = Document::new();
-            for (k, v) in self.order_by {
-                order_by.insert(k, v);
-            }
-            doc.insert("$orderBy", order_by);
-        }
-
-        if !self.fields.is_empty() {
-            let mut fields = Document::new();
-            for (k, v) in self.fields {
-                fields.insert(k, v);
-            }
-            doc.insert("$fields", fields);
-        }
-
-        doc
+        self.hints
     }
 }
 
@@ -307,6 +293,11 @@ impl Query {
     #[inline]
     pub fn build(self) -> (Document, Document) {
         (self.hints.into(), self.query)
+    }
+
+    #[inline]
+    pub fn build_ref(&self) -> (&Document, &Document) {
+        (&self.hints.hints, &self.query)
     }
 }
 

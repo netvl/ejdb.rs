@@ -2,6 +2,8 @@ use std::ffi::{CStr, CString};
 use std::str;
 use std::slice;
 use std::io;
+use std::ptr;
+use std::borrow::Borrow;
 
 use libc::{c_int, c_char};
 
@@ -10,6 +12,7 @@ use bson::{self, oid};
 
 use self::open_mode::OpenMode;
 use utils::tclist::TCList;
+use utils::tcxstr::TCXString;
 use ejdb_bson::{EjdbBsonDocument, EjdbObjectId};
 use {Error, Result, PartialSave};
 
@@ -246,11 +249,12 @@ impl<'db> Collection<'db> {
         }
     }
 
-    pub fn save_all<'a, I>(&self, docs: I) -> Result<Vec<oid::ObjectId>>
-            where I: IntoIterator<Item=&'a bson::Document> {
+    pub fn save_all<I>(&self, docs: I) -> Result<Vec<oid::ObjectId>>
+            where I: IntoIterator,
+                  I::Item: Borrow<bson::Document> {
         let mut result = Vec::new();
         for doc in docs {
-            match self.save(doc) {
+            match self.save(doc.borrow()) {
                 Ok(id) => result.push(id),
                 Err(e) => return Err(Error::PartialSave(PartialSave {
                     cause: Box::new(e),
@@ -262,23 +266,23 @@ impl<'db> Collection<'db> {
     }
 
     #[inline]
-    pub fn query<D: Into<query::Query>>(&self, query: D) -> Query {
+    pub fn query<Q: Borrow<query::Query>>(&self, query: Q) -> Query<Q> {
         Query {
             coll: self,
-            query: query.into(),
+            query: query,
             log_out: None
         }
     }
 }
 
-pub struct Query<'coll, 'db: 'coll, 'out> {
+pub struct Query<'coll, 'db: 'coll, 'out, Q> {
     coll: &'coll Collection<'db>,
-    query: query::Query,
+    query: Q,
     log_out: Option<&'out mut io::Write>
 }
 
-impl<'coll, 'db, 'out> Query<'coll, 'db, 'out> {
-    pub fn log_output<'o>(self, target: &'o mut (io::Write + 'o)) -> Query<'coll, 'db, 'o> {
+impl<'coll, 'db, 'out, Q: Borrow<query::Query>> Query<'coll, 'db, 'out, Q> {
+    pub fn log_output<'o>(self, target: &'o mut (io::Write + 'o)) -> Query<'coll, 'db, 'o, Q> {
         Query {
             coll: self.coll,
             query: self.query,
@@ -286,24 +290,114 @@ impl<'coll, 'db, 'out> Query<'coll, 'db, 'out> {
         }
     }
 
+    #[inline]
     pub fn count(self) -> Result<u32> {
-        unimplemented!()
+        self.execute(ejdb_sys::JBQRYCOUNT).map(|(_, n)| n)
     }
 
+    #[inline]
     pub fn update(self) -> Result<u32> {
-        unimplemented!()
+        self.execute(ejdb_sys::JBQRYCOUNT).map(|(_, n)| n)
     }
 
-    pub fn find_one(self) -> Result<bson::Document> {
-        unimplemented!()
+    pub fn find_one(self) -> Result<Option<bson::Document>> {
+        self.execute(ejdb_sys::JBQRYFINDONE)
+            .map(|(r, n)| QueryResult { result: r, current: 0, total: n })
+            .and_then(|qr| match qr.into_iter().next() {
+                Some(r) => r.map(Some),
+                None => Ok(None)
+            })
     }
 
     pub fn find(self) -> Result<QueryResult> {
-        unimplemented!()
+        self.execute(0).map(|(r, n)| QueryResult { result: r, current: 0, total: n })
+    }
+
+    fn execute(self, flags: u32) -> Result<(ejdb_sys::EJQRESULT, u32)> {
+        let (hints, query) = self.query.borrow().build_ref();
+
+        let mut query_doc = Vec::new();
+        try!(bson::encode_document(&mut query_doc, query));
+
+        let query = unsafe {
+            ejdb_sys::ejdbcreatequery2(self.coll.db.0, query_doc.as_ptr() as *const _)
+        };
+        if query.is_null() {
+            return self.coll.db.last_error("error creating query object");
+        }
+
+        struct QueryGuard(*mut ejdb_sys::EJQ);
+        impl Drop for QueryGuard {
+            fn drop(&mut self) {
+                unsafe { ejdb_sys::ejdbquerydel(self.0); }
+            }
+        }
+
+        let mut query = QueryGuard(query);
+
+        if !hints.is_empty() {
+            query_doc.clear();
+            try!(bson::encode_document(&mut query_doc, hints));
+
+            let new_query = unsafe {
+                ejdb_sys::ejdbqueryhints(self.coll.db.0, query.0, query_doc.as_ptr() as *const _)
+            };
+            if new_query.is_null() {
+                return self.coll.db.last_error("error setting query hints");
+            }
+
+            query.0 = new_query;
+        }
+
+        let mut log = if self.log_out.is_some() { Some(TCXString::new()) } else { None };
+        let log_ptr = log.as_mut().map(|e| e.as_raw()).unwrap_or(ptr::null_mut());
+
+        let mut count = 0;
+        let result = unsafe {
+            ejdb_sys::ejdbqryexecute(self.coll.coll, query.0, &mut count, flags as c_int, log_ptr)
+        };
+        if result.is_null() && (flags & ejdb_sys::JBQRYCOUNT) == 0 {
+            return self.coll.db.last_error("error executing query");
+        }
+
+        Ok((result, count))
     }
 }
 
-pub struct QueryResult;
+pub struct QueryResult {
+    result: ejdb_sys::EJQRESULT,
+    current: c_int,
+    total: u32
+}
+
+impl QueryResult {
+    #[inline]
+    pub fn count(&self) -> u32 { self.total }
+}
+
+impl Drop for QueryResult {
+    fn drop(&mut self) {
+        unsafe {
+            ejdb_sys::ejdbqresultdispose(self.result);
+        }
+    }
+}
+
+impl Iterator for QueryResult {
+    type Item = Result<bson::Document>;
+
+    fn next(&mut self) -> Option<Result<bson::Document>> {
+        let mut item_size = 0;
+        let item: *const u8 = unsafe {
+            ejdb_sys::ejdbqresultbsondata(self.result, self.current, &mut item_size) as *const _
+        };
+        if item.is_null() { return None; }
+        self.current += 1;
+
+        let mut data = unsafe { slice::from_raw_parts(item, item_size as usize) };
+        Some(bson::decode_document(&mut data).map_err(|e| e.into()))
+    }
+}
 
 pub struct Transaction<'coll, 'db: 'coll> {
     coll: &'coll Collection<'db>,
@@ -375,4 +469,31 @@ fn test_save() {
     doc.insert("name".to_owned(), bson::Bson::String("Me".into()));
     doc.insert("age".to_owned(), bson::Bson::FloatingPoint(23.8));
     coll.save(&doc).unwrap();
+}
+
+#[test]
+#[ignore]
+fn test_find() {
+    use query::Q;
+
+    let db = Database::open("/tmp/test_database", OpenMode::default()).unwrap();
+    let coll = db.get_or_create_collection("example_collection", CollectionOptions::default()).unwrap();
+
+    let items = (0..10).map(|i| bson! {
+        "name" => (format!("Me #{}", i)),
+        "age" => (23.8 + i as f64)
+    });
+    coll.save_all(items).unwrap();
+
+    let q = Q.field("age").gte(25);
+
+    for item in coll.query(&q).find().unwrap() {
+        println!("{}", item.unwrap());
+    }
+
+    let count = coll.query(&q).count().unwrap();
+    println!("Count: {}", count);
+
+    let one = coll.query(&q).find_one().unwrap();
+    println!("One: {}", one.unwrap());
 }
