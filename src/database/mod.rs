@@ -44,6 +44,13 @@ pub mod open_mode {
             JBOREADER | JBOWRITER | JBOCREAT
         }
     }
+
+    impl OpenMode {
+        #[inline]
+        pub fn open<P: Into<Vec<u8>>>(self, path: P) -> ::Result<super::Database> {
+            super::Database::open_with_options(path, self)
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -72,7 +79,7 @@ fn error_code_msg(code: i32) -> &'static str {
 }
 
 impl Database {
-    pub fn open<P: Into<Vec<u8>>>(path: P, open_mode: OpenMode) -> Result<Database> {
+    pub fn open_with_options<P: Into<Vec<u8>>>(path: P, open_mode: OpenMode) -> Result<Database> {
         let ejdb = unsafe { ejdb_sys::ejdbnew() };
         if ejdb.is_null() {
             return Err("cannot create database".into())
@@ -85,6 +92,11 @@ impl Database {
             }
         }
         Ok(Database(ejdb))
+    }
+
+    #[inline]
+    pub fn open<P: Into<Vec<u8>>>(path: P) -> Result<Database> {
+        OpenMode::default().open(path)
     }
 
     pub fn last_error_msg(&self) -> Option<&'static str> {
@@ -111,7 +123,7 @@ impl Database {
         }
     }
 
-    pub fn collection<S: Into<Vec<u8>>>(&self, name: S, options: CollectionOptions) -> Result<Collection> {
+    pub fn collection_with_options<S: Into<Vec<u8>>>(&self, name: S, options: CollectionOptions) -> Result<Collection> {
         let p = try!(CString::new(name).map_err(|_| "invalid collection name"));
         let mut ejcollopts = ejdb_sys::EJCOLLOPTS {
             large: options.large as u8,
@@ -125,6 +137,11 @@ impl Database {
         } else {
             Ok(Collection { coll: coll, db: self })
         }
+    }
+
+    #[inline]
+    pub fn collection<S: Into<Vec<u8>>>(&self, name: S) -> Result<Collection> {
+        CollectionOptions::default().get_or_create(self, name)
     }
 
     pub fn drop_collection<S: Into<Vec<u8>>>(&self, name: S, prune: bool) -> Result<()> {
@@ -163,6 +180,10 @@ impl CollectionOptions {
     pub fn cached_records(mut self, cached_records: i32) -> CollectionOptions {
         self.cached_records = cached_records;
         self
+    }
+
+    pub fn get_or_create<S: Into<Vec<u8>>>(self, db: &Database, name: S) -> Result<Collection> {
+        db.collection_with_options(name, self)
     }
 }
 
@@ -453,8 +474,8 @@ impl<'coll, 'db> Transaction<'coll, 'db> {
 #[test]
 #[ignore]
 fn test_save() {
-    let db = Database::open("/tmp/test_database", OpenMode::default()).unwrap();
-    let coll = db.collection("example_collection", CollectionOptions::default()).unwrap();
+    let db = Database::open("/tmp/test_database").unwrap();
+    let coll = db.collection("example_collection").unwrap();
 
     coll.save(bson! {
         "name" => "Me",
@@ -467,8 +488,8 @@ fn test_save() {
 fn test_find() {
     use query::Q;
 
-    let db = Database::open("/tmp/test_database", OpenMode::default()).unwrap();
-    let coll = db.collection("example_collection", CollectionOptions::default()).unwrap();
+    let db = Database::open("/tmp/test_database").unwrap();
+    let coll = db.collection("example_collection").unwrap();
 
     let items = (0..10).map(|i| bson! {
         "name" => (format!("Me #{}", i)),

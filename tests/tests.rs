@@ -5,19 +5,19 @@ extern crate bson;
 
 use tempdir::TempDir;
 
-use ejdb::{Database, OpenMode, CollectionOptions, IndexType};
+use ejdb::{Database, CollectionOptions, IndexType};
 
 #[test]
 fn test_meta() {
     let (db, dir) = make_db();
 
-    db.collection("test_1", CollectionOptions::default()).unwrap().save_all(vec![
+    db.collection("test_1").unwrap().save_all(vec![
         bson!{ "name" => "Foo", "count" => 123 },
         bson!{ "name" => "Bar", "whatever" => ["a", 1, 42.3] }
     ]).unwrap();
 
     let options = CollectionOptions::default().compressed(true).cached_records(512);
-    let coll_2 = db.collection("test_2", options).unwrap();
+    let coll_2 = options.get_or_create(&db, "test_2").unwrap();
     coll_2.index("name").string(true).set().unwrap();
     coll_2.index("count").number().set().unwrap();
 
@@ -73,8 +73,45 @@ fn test_meta() {
     }
 }
 
+#[test]
+fn test_save_load() {
+    let (db, _dir) = make_db();
+
+    let coll = db.collection("test").unwrap();
+    let ids = coll.save_all(vec![
+        bson!{ "name" => "Foo", "count" => 123 },
+        bson!{ "name" => "Bar", "items" => [1, "hello", 42.3] },
+        bson!{ "title" => "Baz", "subobj" => { "key" => "a", "xyz" => 632 } }
+    ]).unwrap();
+    assert_eq!(ids.len(), 3);
+
+    let item_1 = coll.load(ids[0].clone()).unwrap().unwrap();
+    assert_eq!(item_1, bson! {
+        "_id" => (ids[0].clone()),
+        "name" => "Foo",
+        "count" => 123
+    });
+
+    let item_2 = coll.load(ids[1].clone()).unwrap().unwrap();
+    assert_eq!(item_2, bson! {
+        "_id" => (ids[1].clone()),
+        "name" => "Bar",
+        "items" => [1, "hello", 42.3]
+    });
+
+    let item_3 = coll.load(ids[2].clone()).unwrap().unwrap();
+    assert_eq!(item_3, bson! {
+        "_id" => (ids[2].clone()),
+        "title" => "Baz",
+        "subobj" => {
+            "key" => "a",
+            "xyz" => 632
+        }
+    });
+}
+
 fn make_db() -> (Database, TempDir) {
     let dir = TempDir::new("ejdb").expect("cannot create temporary directory");
-    let db = Database::open(dir.path().join("db").to_str().unwrap(), OpenMode::default()).expect("cannot create database");
+    let db = Database::open(dir.path().join("db").to_str().unwrap()).expect("cannot create database");
     (db, dir)
 }
