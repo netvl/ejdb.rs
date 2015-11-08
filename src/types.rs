@@ -11,7 +11,7 @@ pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
 pub struct PartialSave {
-    pub cause: Box<Error>,
+    pub cause: Box<error::Error>,
     pub successful_ids: Vec<oid::ObjectId>
 }
 
@@ -50,19 +50,38 @@ impl fmt::Display for PartialSave {
     }
 }
 
-error_type! {
+quick_error! {
     #[derive(Debug)]
     pub enum Error {
-        Io(io::Error) {
-            cause (e) Some(e);
-        },
-        BsonEncoding(bson::EncoderError) { },
-        BsonDecoding(bson::DecoderError) { },
-        PartialSave(PartialSave) { },
-        Other(Cow<'static, str>) {
-            desc (e) &**e;
-            from (s: &'static str) s.into();
-            from (s: String) s.into();
+        Io(err: io::Error) {
+            from()
+            description("I/O error")
+            display("I/O error: {}", err)
+            cause(err)
+        }
+        BsonEncoding(err: bson::EncoderError) {
+            from()
+            description("BSON encoding error")
+            display("BSON encoding error: {}", err)
+            cause(err)
+        }
+        BsonDecoding(err: bson::DecoderError) {
+            from()
+            description("BSON decoding error")
+            display("BSON decoding error: {}", err)
+            cause(err)
+        }
+        PartialSave(err: PartialSave) {
+            from()
+            description("partial save")
+            display("partial save: {}", err)
+            cause(&*err.cause)
+        }
+        Other(msg: Cow<'static, str>) {
+            description(&*msg)
+            display("{}", msg)
+            from(s: &'static str) -> (s.into())
+            from(s: String) -> (s.into())
         }
     }
 }

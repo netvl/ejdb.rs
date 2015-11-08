@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
-extern crate error_type;
+extern crate quick_error;
 extern crate bson;
 extern crate itertools;
 extern crate ejdb_sys;

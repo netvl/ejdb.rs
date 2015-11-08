@@ -6,7 +6,7 @@ description = "Bindings for EJDB, and embedded JSON database"
 repository = "https://github.com/netvl/ejdb.rs"
 documentation = "https://netvl.github.io/ejdb.rs/"
 readme = "Readme.md"
-keywords = ["ejdb", "database", "ffi"]
+keywords = ["ejdb", "database", "json", "bson", "ffi"]
 license = "MIT"
 
 [lib]
@@ -16,7 +16,7 @@ name = "ejdb"
 ejdb-sys = { path = "ejdb-sys", version = "0.1" }
 bson = "0.1"
 bitflags = "0.3"
-error-type = "0.1"
+quick-error = "0.1"
 libc = "0.1"
 itertools = "0.4"
 
