@@ -10,7 +10,7 @@ extern crate libc;
 pub use database::{
     Database, Collection, CollectionOptions, Transaction,
     Query, QueryResult, Index,
-    DatabaseMetadata, CollectionMetadata, IndexMetadata
+    DatabaseMetadata, CollectionMetadata, IndexMetadata, IndexType
 };
 pub use database::open_mode::{self, OpenMode};
 pub use database::query;

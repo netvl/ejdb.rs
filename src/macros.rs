@@ -1,4 +1,5 @@
 
+#[macro_export]
 macro_rules! bson {
     { [ $($e:tt),* ] } => {{
         let mut v = Vec::new();

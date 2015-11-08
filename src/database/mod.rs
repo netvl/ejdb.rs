@@ -11,7 +11,7 @@ use ejdb_sys;
 use bson::{self, oid};
 
 pub use self::indices::Index;
-pub use self::meta::{DatabaseMetadata, CollectionMetadata, IndexMetadata};
+pub use self::meta::{DatabaseMetadata, CollectionMetadata, IndexMetadata, IndexType};
 
 use self::open_mode::OpenMode;
 use utils::tcxstr::TCXString;

@@ -26,6 +26,7 @@ impl Database {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct DatabaseMetadata(Document);
 
 impl DatabaseMetadata {
@@ -61,6 +62,7 @@ fn parse_collection_metadata(bson: &Bson) -> CollectionMetadata {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct CollectionMetadata<'a>(Cow<'a, Document>);
 
 impl<'a> CollectionMetadata<'a> {
@@ -121,6 +123,7 @@ fn parse_index_metadata(bson: &Bson) -> IndexMetadata {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct IndexMetadata<'a>(&'a Document);
 
 impl<'a> IndexMetadata<'a> {
@@ -161,6 +164,7 @@ impl<'a> Deref for IndexMetadata<'a> {
     fn deref(&self) -> &Document { &*self.0 }
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum IndexType {
     Lexical,
     Decimal,
