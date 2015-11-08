@@ -11,6 +11,7 @@ use ejdb_sys;
 use bson::{self, oid};
 
 pub use self::indices::Index;
+pub use self::meta::{DatabaseMetadata, CollectionMetadata, IndexMetadata};
 
 use self::open_mode::OpenMode;
 use utils::tclist::TCList;
@@ -21,6 +22,7 @@ use {Error, Result, PartialSave};
 pub mod query;
 
 mod indices;
+mod meta;
 
 pub mod open_mode {
     use ejdb_sys;
@@ -80,7 +82,7 @@ impl Database {
         let p = try!(CString::new(path).map_err(|_| "invalid path specified"));
         unsafe {
             if ejdb_sys::ejdbopen(ejdb, p.as_ptr(), open_mode.bits() as c_int) == 0 {
-                return Err(error_code_msg(last_error_code(ejdb)).into());
+                return Err(format!("cannot open database: {}", error_code_msg(last_error_code(ejdb))).into());
             }
         }
         Ok(Database(ejdb))
@@ -218,7 +220,7 @@ impl<'db> Collection<'db> {
     }
 
     #[inline]
-    pub fn begin(&self) -> Result<Transaction> { Transaction::new(self) }
+    pub fn begin_transaction(&self) -> Result<Transaction> { Transaction::new(self) }
 
     pub fn transaction_active(&self) -> Result<bool> {
         let mut result = 0;

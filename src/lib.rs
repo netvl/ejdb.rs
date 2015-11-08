@@ -7,10 +7,13 @@ extern crate itertools;
 extern crate ejdb_sys;
 extern crate libc;
 
-pub use database::{Database, Collection, CollectionOptions, Transaction, Query, QueryResult, Index};
+pub use database::{
+    Database, Collection, CollectionOptions, Transaction,
+    Query, QueryResult, Index,
+    DatabaseMetadata, CollectionMetadata, IndexMetadata
+};
 pub use database::open_mode::{self, OpenMode};
 pub use database::query;
-pub use ejdb_bson::EjdbBsonDocument;
 pub use types::*;
 pub use utils::bson::DocumentBuilder;
 
