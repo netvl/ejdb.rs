@@ -2,25 +2,24 @@
 extern crate bitflags;
 #[macro_use]
 extern crate quick_error;
-extern crate bson;
+extern crate bson as bson_crate;
 extern crate itertools;
 extern crate ejdb_sys;
 extern crate libc;
 
-pub use database::{
-    Database, Collection, CollectionOptions, Transaction,
-    Query, QueryResult, Index,
-    DatabaseMetadata, CollectionMetadata, IndexMetadata, IndexType
-};
-pub use database::open_mode::{self, OpenMode};
+pub use bson_crate as bson;
+
+pub use database::{Database, Collection, CollectionOptions, Transaction, Query, QueryResult};
+pub use database::open_mode::{self, DatabaseOpenMode};
 pub use database::query;
-pub use types::*;
-pub use utils::bson::DocumentBuilder;
-pub use ejdb_bson::{EjdbBsonDocument, EjdbObjectId};
+pub use database::indices::Index;
+pub use database::meta;
+pub use types::{Result, Error};
 
 #[macro_use]
 mod macros;
 mod database;
-mod ejdb_bson;
-mod types;
 mod utils;
+
+pub mod ejdb_bson;
+pub mod types;

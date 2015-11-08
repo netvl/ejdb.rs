@@ -4,57 +4,96 @@ use std::slice;
 use std::io;
 use std::ptr;
 use std::borrow::Borrow;
+use std::fmt;
 
 use libc::{c_int, c_char};
 
 use ejdb_sys;
 use bson::{self, oid};
 
-pub use self::indices::Index;
-pub use self::meta::{DatabaseMetadata, CollectionMetadata, IndexMetadata, IndexType};
-
-use self::open_mode::OpenMode;
+use self::open_mode::DatabaseOpenMode;
 use utils::tcxstr::TCXString;
 use ejdb_bson::{EjdbBsonDocument, EjdbObjectId};
-use {Error, Result, PartialSave};
+use types::PartialSave;
+use {Error, Result};
 
+pub mod indices;
 pub mod query;
-
-mod indices;
-mod meta;
+pub mod meta;
 
 pub mod open_mode {
     use ejdb_sys;
 
     bitflags! {
-        flags OpenMode: u32 {
-            const JBOREADER  = ejdb_sys::JBOREADER,
-            const JBOWRITER  = ejdb_sys::JBOWRITER,
-            const JBOCREAT   = ejdb_sys::JBOCREAT,
-            const JBOTRUNC   = ejdb_sys::JBOTRUNC,
-            const JBONOLCK   = ejdb_sys::JBONOLCK,
-            const JBOLCKNB   = ejdb_sys::JBOLCKNB,
-            const JBOTSYNC   = ejdb_sys::JBOTSYNC,
+        /// Several bit flags defining the open mode for EJDB database.
+        ///
+        /// This type has `Default` implementation which returns the most common set of open
+        /// mode flags:
+        ///
+        /// ```
+        /// # use ejdb::{DatabaseOpenMode, open_mode};
+        /// assert_eq!(
+        ///     DatabaseOpenMode::default(),
+        ///     open_mode::READ | open_mode::WRITE | open_mode::CREATE
+        /// );
+        /// ```
+        ///
+        /// This default set of flags is used by `Database::open()` static method.
+        flags DatabaseOpenMode: u32 {
+            /// Open the database in read-only mode.
+            const READ                    = ejdb_sys::JBOREADER,
+            /// Open the database in write-only mode.
+            const WRITE                   = ejdb_sys::JBOWRITER,
+            /// Create the database file if it does not exist.
+            const CREATE                  = ejdb_sys::JBOCREAT,
+            /// Truncate the database after opening it.
+            const TRUNCATE                = ejdb_sys::JBOTRUNC,
+            /// Open the database without locking.
+            const NO_LOCK                 = ejdb_sys::JBONOLCK,
+            /// Lock the database without blocking.
+            const LOCK_WITHOUT_BLOCKING   = ejdb_sys::JBOLCKNB,
+            /// Synchronize every transaction.
+            const SYNC                    = ejdb_sys::JBOTSYNC,
         }
     }
 
-    impl Default for OpenMode {
+    impl Default for DatabaseOpenMode {
         #[inline]
-        fn default() -> OpenMode {
-            JBOREADER | JBOWRITER | JBOCREAT
+        fn default() -> DatabaseOpenMode {
+            READ | WRITE | CREATE
         }
     }
 
-    impl OpenMode {
+    impl DatabaseOpenMode {
+        /// Invokes `Database::open_with_mode()` with this mode and the provided path as arguments.
+        ///
+        /// This is a convenient shortcut for creating database with non-default options.
+        ///
+        /// # Example
+        ///
+        /// ```no_run
+        /// # use ejdb::{Database, DatabaseOpenMode, open_mode};
+        /// let db = (DatabaseOpenMode::default() | open_mode::TRUNCATE).open("path/to/db");
+        /// // equivalent to
+        /// let db = Database::open_with_mode(
+        ///     "path/to/db", DatabaseOpenMode::default() | open_mode::TRUNCATE
+        /// );
+        /// ```
         #[inline]
         pub fn open<P: Into<Vec<u8>>>(self, path: P) -> ::Result<super::Database> {
-            super::Database::open_with_options(path, self)
+            super::Database::open_with_mode(path, self)
         }
     }
 }
 
-#[derive(Debug)]
-#[allow(raw_pointer_derive)]
+/// An EJDB database handle.
+///
+/// This type represents an access point for an EJDB database. An object of this type can be
+/// created by `open()` or `open_with_mode()` methods or with `DatabaseOpenMode::open()`
+/// method. When a value of this type is dropped, the database will be closed automatically.
+///
+/// This type has methods to access EJDB database metadata as well as methods for manipulating
+/// collections.
 pub struct Database(*mut ejdb_sys::EJDB);
 
 impl Drop for Database {
@@ -62,6 +101,12 @@ impl Drop for Database {
         unsafe {
             ejdb_sys::ejdbdel(self.0);
         }
+    }
+}
+
+impl fmt::Debug for Database {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Database({:p})", self.0)
     }
 }
 
@@ -79,7 +124,26 @@ fn error_code_msg(code: i32) -> &'static str {
 }
 
 impl Database {
-    pub fn open_with_options<P: Into<Vec<u8>>>(path: P, open_mode: OpenMode) -> Result<Database> {
+    /// Opens the specified database with the provided open mode.
+    ///
+    /// The `path` argument may be anything convertible to a vector of bytes. Strings, string
+    /// slices, bytes, bytes slices will all do.
+    ///
+    /// See also `DatabaseOpenMode::open()` method for a possibly more convenient alternative.
+    ///
+    /// # Failures
+    ///
+    /// Returns an error when the database can't be accessed, or if `path` contains zero bytes
+    /// and probably in other cases when EJDB library can't open the database.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::{Database, DatabaseOpenMode};
+    /// let db = Database::open_with_mode("/path/to/db", DatabaseOpenMode::default()).unwrap();
+    /// // work with the database
+    /// ```
+    pub fn open_with_mode<P: Into<Vec<u8>>>(path: P, open_mode: DatabaseOpenMode) -> Result<Database> {
         let ejdb = unsafe { ejdb_sys::ejdbnew() };
         if ejdb.is_null() {
             return Err("cannot create database".into())
@@ -94,22 +158,57 @@ impl Database {
         Ok(Database(ejdb))
     }
 
+    /// A shortcut for `Database::open_with_mode(path, DatabaseOpenMode::default())`.
+    ///
+    /// This method is used in most cases when one needs to open a database.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::{Database, DatabaseOpenMode};
+    /// let db = Database::open("/path/to/database").unwrap();
+    /// // work with the database
+    /// ```
     #[inline]
     pub fn open<P: Into<Vec<u8>>>(path: P) -> Result<Database> {
-        OpenMode::default().open(path)
+        DatabaseOpenMode::default().open(path)
     }
 
-    pub fn last_error_msg(&self) -> Option<&'static str> {
+    fn last_error_msg(&self) -> Option<&'static str> {
         match last_error_code(self.0) {
             0 => None,
             n => Some(error_code_msg(n))
         }
     }
 
-    pub fn last_error<T>(&self, msg: &'static str) -> Result<T> {
+    fn last_error<T>(&self, msg: &'static str) -> Result<T> {
         Err(format!("{}: {}", msg, self.last_error_msg().unwrap_or("unknown error")).into())
     }
 
+    /// Returns the given collection by its name, if it exists.
+    ///
+    /// This method will only return a collection if it already exists in the database; it
+    /// won't create a new collection. See `Database::collection_with_options()` and
+    /// `Database::collection()` methods if you need to create new collections.
+    ///
+    /// `path` argument may be of any type convertible to a vector of bytes, like strings or
+    /// byte arrays.
+    ///
+    /// # Failures
+    ///
+    /// Fails if `name` contains zero bytes or in other cases when the corresponding EJDB
+    /// operation can't be completed.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::Database;
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// match db.get_collection("some_collection").unwrap() {
+    ///     Some(coll) => { /* work with the collection */ }
+    ///     None => { /* do something else */ }
+    /// }
+    /// ```
     pub fn get_collection<S: Into<Vec<u8>>>(&self, name: S) -> Result<Option<Collection>> {
         let p = try!(CString::new(name).map_err(|_| "invalid collection name"));
         let coll = unsafe { ejdb_sys::ejdbgetcoll(self.0, p.as_ptr()) };
@@ -123,6 +222,28 @@ impl Database {
         }
     }
 
+    /// Returns a collection by its name or creates one with the given options if it doesn't exist.
+    ///
+    /// `name` argument may be of any type convertible to a byte vector, for example, strings
+    /// or byte slices. `CollectionOptions` specify which options the collection will have
+    /// if it doesn't exist; if it does exist, this argument is ignored.
+    ///
+    /// See also `CollectionOptions::get_or_create()` method for a possibly more convenient
+    /// alternative.
+    ///
+    /// # Failures
+    ///
+    /// Returns an error when `name` argument contains zero bytes in it or when the corresponding
+    /// EJDB operation cannot be completed successfully.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::{Database, CollectionOptions};
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection_with_options("some_collection", CollectionOptions::default()).unwrap();
+    /// // work with the collection
+    /// ```
     pub fn collection_with_options<S: Into<Vec<u8>>>(&self, name: S, options: CollectionOptions) -> Result<Collection> {
         let p = try!(CString::new(name).map_err(|_| "invalid collection name"));
         let mut ejcollopts = ejdb_sys::EJCOLLOPTS {
@@ -139,11 +260,42 @@ impl Database {
         }
     }
 
+    /// A shortcut for `Database::collection_with_options(&db, name, CollectionOptions::default())`.
+    ///
+    /// This method is used in most cases when access to a collection is needed.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::Database;
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection("some_collection").unwrap();
+    /// // work with the collection
+    /// ```
     #[inline]
     pub fn collection<S: Into<Vec<u8>>>(&self, name: S) -> Result<Collection> {
         CollectionOptions::default().get_or_create(self, name)
     }
 
+    /// Removes the specified collection from the database, possibly dropping all the data in it.
+    ///
+    /// This method removes a collection from the database. Its second argument, `prune`,
+    /// determines whether all the data files for the collection should be removed as well
+    /// (`true` for removing, naturally). `name` may be of any type convertible to a byte vector,
+    /// for example, a string or a byte slice.
+    ///
+    /// # Failures
+    ///
+    /// Returns an error if `name` argument contains zero bytes inside it or if the
+    /// corresponding EJDB operation cannot be completed successfully.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::Database;
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// db.drop_collection("some_collection", true).unwrap();
+    /// ```
     pub fn drop_collection<S: Into<Vec<u8>>>(&self, name: S, prune: bool) -> Result<()> {
         let p = try!(CString::new(name).map_err(|_| "invalid collection name"));
         if unsafe { ejdb_sys::ejdbrmcoll(self.0, p.as_ptr(), prune as u8) } != 0 {
@@ -154,6 +306,7 @@ impl Database {
     }
 }
 
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct CollectionOptions {
     pub large: bool,
     pub compressed: bool,

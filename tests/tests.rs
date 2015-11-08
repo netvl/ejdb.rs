@@ -5,7 +5,8 @@ extern crate bson;
 
 use tempdir::TempDir;
 
-use ejdb::{Database, CollectionOptions, IndexType};
+use ejdb::{Database, CollectionOptions};
+use ejdb::meta::IndexType;
 
 #[test]
 fn test_meta() {
