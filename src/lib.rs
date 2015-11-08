@@ -16,6 +16,7 @@ pub use database::open_mode::{self, OpenMode};
 pub use database::query;
 pub use types::*;
 pub use utils::bson::DocumentBuilder;
+pub use ejdb_bson::{EjdbBsonDocument, EjdbObjectId};
 
 #[macro_use]
 mod macros;

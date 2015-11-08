@@ -1,4 +1,5 @@
 extern crate ejdb;
+extern crate bson;
 
 use std::env;
 use std::io::Write;
@@ -17,9 +18,8 @@ fn main() {
 
     let db = Database::open(db_path, OpenMode::default())
         .unwrap_or_else(|e| abort!(1, "Error opening database: {}", e));
-    println!("Collections:");
-    for name in db.get_collection_names()
-            .unwrap_or_else(|e| abort!(1, "Error getting collection names: {}", e)) {
-        println!("* {}", name);
-    }
+
+    println!("Metadata:");
+    let meta = db.get_metadata().unwrap_or_else(|e| abort!(1, "Error loading metadata: {}", e));
+    println!("{}", bson::Bson::Document(meta.into_inner()).to_json().pretty());
 }

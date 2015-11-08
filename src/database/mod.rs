@@ -14,7 +14,6 @@ pub use self::indices::Index;
 pub use self::meta::{DatabaseMetadata, CollectionMetadata, IndexMetadata};
 
 use self::open_mode::OpenMode;
-use utils::tclist::TCList;
 use utils::tcxstr::TCXString;
 use ejdb_bson::{EjdbBsonDocument, EjdbObjectId};
 use {Error, Result, PartialSave};
@@ -97,20 +96,6 @@ impl Database {
 
     pub fn last_error<T>(&self, msg: &'static str) -> Result<T> {
         Err(format!("{}: {}", msg, self.last_error_msg().unwrap_or("unknown error")).into())
-    }
-
-    pub fn get_collection_names(&self) -> Result<Vec<String>> {
-        let list = unsafe { ejdb_sys::ejdbgetcolls(self.0) };
-        if list.is_null() {
-            return self.last_error("cannot get collection names");
-        }
-
-        let list: TCList<ejdb_sys::EJCOLL> = unsafe { TCList::from_ptr(list) };
-
-        Ok(list.iter()
-            .map(|c| Collection { coll: c, db: self })
-            .map(|c| c.name())
-            .collect())
     }
 
     pub fn get_collection<S: Into<Vec<u8>>>(&self, name: S) -> Result<Option<Collection>> {
@@ -198,7 +183,6 @@ pub struct Collection<'db> {
 }
 
 impl<'db> Collection<'db> {
-    // TODO: use ejdbmeta
     pub fn name(&self) -> String {
         fn get_coll_name(coll: *mut ejdb_sys::EJCOLL) -> (*const u8, usize) {
             #[repr(C)]
