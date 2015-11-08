@@ -10,6 +10,8 @@ use libc::{c_int, c_char};
 use ejdb_sys;
 use bson::{self, oid};
 
+pub use self::indices::Index;
+
 use self::open_mode::OpenMode;
 use utils::tclist::TCList;
 use utils::tcxstr::TCXString;
@@ -17,6 +19,8 @@ use ejdb_bson::{EjdbBsonDocument, EjdbObjectId};
 use {Error, Result, PartialSave};
 
 pub mod query;
+
+mod indices;
 
 pub mod open_mode {
     use ejdb_sys;
@@ -120,7 +124,7 @@ impl Database {
         }
     }
 
-    pub fn get_or_create_collection<S: Into<Vec<u8>>>(&self, name: S, options: CollectionOptions) -> Result<Collection> {
+    pub fn collection<S: Into<Vec<u8>>>(&self, name: S, options: CollectionOptions) -> Result<Collection> {
         let p = try!(CString::new(name).map_err(|_| "invalid collection name"));
         let mut ejcollopts = ejdb_sys::EJCOLLOPTS {
             large: options.large as u8,
@@ -210,7 +214,7 @@ impl<'db> Collection<'db> {
         let (data, size) = get_coll_name(self.coll);
         let bytes = unsafe { slice::from_raw_parts(data, size) };
         // XXX: should be safe, but need to check
-        unsafe { str::from_utf8_unchecked(bytes).to_owned() }
+        unsafe { str::from_utf8_unchecked(bytes).into() }
     }
 
     #[inline]
@@ -225,8 +229,8 @@ impl<'db> Collection<'db> {
         }
     }
 
-    pub fn save(&self, doc: &bson::Document) -> Result<oid::ObjectId> {
-        let mut ejdb_doc = try!(EjdbBsonDocument::from_bson(doc));
+    pub fn save<D: Borrow<bson::Document>>(&self, doc: D) -> Result<oid::ObjectId> {
+        let mut ejdb_doc = try!(EjdbBsonDocument::from_bson(doc.borrow()));
         let mut out_id = EjdbObjectId::empty();
 
         if unsafe { ejdb_sys::ejdbsavebson(self.coll, ejdb_doc.as_raw_mut(), out_id.as_raw_mut()) != 0 } {
@@ -349,6 +353,7 @@ impl<'coll, 'db, 'out, Q: Borrow<query::Query>> Query<'coll, 'db, 'out, Q> {
             query.0 = new_query;
         }
 
+        // TODO: actually use log output
         let mut log = if self.log_out.is_some() { Some(TCXString::new()) } else { None };
         let log_ptr = log.as_mut().map(|e| e.as_raw()).unwrap_or(ptr::null_mut());
 
@@ -463,12 +468,12 @@ impl<'coll, 'db> Transaction<'coll, 'db> {
 #[ignore]
 fn test_save() {
     let db = Database::open("/tmp/test_database", OpenMode::default()).unwrap();
-    let coll = db.get_or_create_collection("example_collection", CollectionOptions::default()).unwrap();
+    let coll = db.collection("example_collection", CollectionOptions::default()).unwrap();
 
-    let mut doc = bson::Document::new();
-    doc.insert("name".to_owned(), bson::Bson::String("Me".into()));
-    doc.insert("age".to_owned(), bson::Bson::FloatingPoint(23.8));
-    coll.save(&doc).unwrap();
+    coll.save(bson! {
+        "name" => "Me",
+        "age" => 23.8
+    }).unwrap();
 }
 
 #[test]
@@ -477,7 +482,7 @@ fn test_find() {
     use query::Q;
 
     let db = Database::open("/tmp/test_database", OpenMode::default()).unwrap();
-    let coll = db.get_or_create_collection("example_collection", CollectionOptions::default()).unwrap();
+    let coll = db.collection("example_collection", CollectionOptions::default()).unwrap();
 
     let items = (0..10).map(|i| bson! {
         "name" => (format!("Me #{}", i)),
