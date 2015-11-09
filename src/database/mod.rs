@@ -20,12 +20,13 @@ use {Error, Result};
 pub mod indices;
 pub mod query;
 pub mod meta;
+pub mod tx;
 
 pub mod open_mode {
     use ejdb_sys;
 
     bitflags! {
-        /// Several bit flags defining the open mode for EJDB database.
+        /// Several bit flags defining how an EJDB database should be opened.
         ///
         /// This type has `Default` implementation which returns the most common set of open
         /// mode flags:
@@ -306,11 +307,33 @@ impl Database {
     }
 }
 
+/// Represents a set of options of an EJDB collection.
+///
+/// Used when new collections are created. It is not possible to change options of a created
+/// collection.
+///
+/// This is a builder object, so you can chain method calls to set various options. Finally,
+/// you can create a collection with these options with `get_or_create()` method.
+///
+/// # Example
+///
+/// ```no_run
+/// # use ejdb::CollectionOptions;
+/// let options = CollectionOptions::default()
+///     .large(true)
+///     .compressed(true)
+///     .records(1_024_000)
+///     .cached_records(1024);
+/// ```
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct CollectionOptions {
+    /// Make the collection "large", i.e. able to hold more than 2GB of data. Default is false.
     pub large: bool,
+    /// Compress records in the collection with DEFLATE. Default is false.
     pub compressed: bool,
+    /// Expected number of records in the collection. Default is 128 000.
     pub records: i64,
+    /// Maximum number of records cached in memory. Default is 0.
     pub cached_records: i32
 }
 
@@ -335,6 +358,26 @@ impl CollectionOptions {
         self
     }
 
+    /// Invokes `db.collection_with_options(name, options)` with this object as an argument.
+    ///
+    /// This is a convenience method which allows setting options and creating a collection
+    /// in one go. Remember that if collection with the specified name already exists,
+    /// it will be returned and options will be ignored.
+    ///
+    /// `name` argument can be of any type which is convertible to a vector of bytes, like
+    /// string or byte slice.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::{Database, CollectionOptions};
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = CollectionOptions::default()
+    ///     .large(true).compressed(true)
+    ///     .records(1_024_000).cached_records(1024)
+    ///     .get_or_create(&db, "new_collection").unwrap();
+    /// // work with the collection
+    /// ```
     pub fn get_or_create<S: Into<Vec<u8>>>(self, db: &Database, name: S) -> Result<Collection> {
         db.collection_with_options(name, self)
     }
@@ -351,13 +394,40 @@ impl Default for CollectionOptions {
     }
 }
 
+/// A handle to an EJDB collection.
+///
+/// This structure is connected via a lifetime to the corresponding database object,
+/// so it is not possible for collections to outlive their database.
+///
+/// Most of the work with EJDB databases goes through this structure. This includes the
+/// following operations:
+///
+/// * Executing queries.
+/// * Creating transacions.
+/// * Saving and loading objects by their identifier.
+///
+/// Dropping and creating collections is performed through `Database` object.
+///
+/// `Collection` instances can be created with `Database::get_collection()`,
+/// `Database::collection()`, `Database::collection_with_options()` or
+/// `CollectionOptions::get_or_create()` methods.
 pub struct Collection<'db> {
     coll: *mut ejdb_sys::EJCOLL,
     db: &'db Database
 }
 
 impl<'db> Collection<'db> {
-    pub fn name(&self) -> String {
+    /// Returns the name of the collection.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::Database;
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection("some_collection").unwrap();
+    /// assert_eq!("some_collection", coll.name());
+    /// ```
+    pub fn name(&self) -> &str {
         fn get_coll_name(coll: *mut ejdb_sys::EJCOLL) -> (*const u8, usize) {
             #[repr(C)]
             struct EjcollInternal {
@@ -374,21 +444,40 @@ impl<'db> Collection<'db> {
         let (data, size) = get_coll_name(self.coll);
         let bytes = unsafe { slice::from_raw_parts(data, size) };
         // XXX: should be safe, but need to check
-        unsafe { str::from_utf8_unchecked(bytes).into() }
+        unsafe { str::from_utf8_unchecked(bytes) }
     }
 
-    #[inline]
-    pub fn begin_transaction(&self) -> Result<Transaction> { Transaction::new(self) }
-
-    pub fn transaction_active(&self) -> Result<bool> {
-        let mut result = 0;
-        if unsafe { ejdb_sys::ejdbtranstatus(self.coll, &mut result) != 0 } {
-            Ok(result != 0)
-        } else {
-            self.db.last_error("error getting transaction status")
-        }
-    }
-
+    /// Saves the given BSON document to this collection, assigning it a fresh id, if needed.
+    ///
+    /// This is a convenient way to store a single object into the database. If the document
+    /// contains an `_id` field of type `bson::oid::ObjectId`, then it will be used as
+    /// an identifier for the new record; otherwise, a fresh identifier is generated. The
+    /// actual identifier of the record, be it the provided one or the generated one,
+    /// is returned if this call completed successfully.
+    ///
+    /// If a document with such id is already present in the collection, it will be replaced
+    /// with the provided one entirely.
+    ///
+    /// # Failures
+    ///
+    /// Returns an error if the provided document can't be converted to the EJDB one or
+    /// if some error occurs which prevents the corresponding EJDB operation from successfull
+    /// completion.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[macro_use] extern crate ejdb;
+    /// # use ejdb::Database;
+    /// # fn main() {
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection("some_collection").unwrap();
+    /// coll.save(bson! {
+    ///     "name" => "FooBar",
+    ///     "count" => 12345
+    /// }).unwrap();
+    /// # }
+    /// ```
     pub fn save<D: Borrow<bson::Document>>(&self, doc: D) -> Result<oid::ObjectId> {
         let mut ejdb_doc = try!(EjdbBsonDocument::from_bson(doc.borrow()));
         let mut out_id = EjdbObjectId::empty();
@@ -400,6 +489,27 @@ impl<'db> Collection<'db> {
         }
     }
 
+    /// Attempts to load a BSON document from this collection by its id.
+    ///
+    /// This is a convenient way to find a single object by its identifier without resorting
+    /// to queries. If the object with the specified id is present in the collection,
+    /// returns it, otherwise returns `None`.
+    ///
+    /// # Failures
+    ///
+    /// Returns an error if there are problems in converting the document from EJDB BSON
+    /// representation or if the corresponding EJDB operation can't be completed successfully.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::Database;
+    /// # use ejdb::bson::oid::ObjectId;
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection("some_collection").unwrap();
+    /// let value = coll.load(ObjectId::with_string("1234567890abcdef0987feab").unwrap()).unwrap();
+    /// // value is ejdb::bson::Document
+    /// ```
     pub fn load(&self, id: oid::ObjectId) -> Result<Option<bson::Document>> {
         let ejdb_oid: EjdbObjectId = id.into();
         let result = unsafe { ejdb_sys::ejdbloadbson(self.coll, ejdb_oid.as_raw()) };
@@ -413,6 +523,35 @@ impl<'db> Collection<'db> {
         }
     }
 
+    /// Saves all BSON documents in the provided iterable to this collection.
+    ///
+    /// Every BSON document from the provided iterable will be saved to this collection as if
+    /// they all have been passed one by one to `Collection::save()`. Returns a vector
+    /// of identifiers of each created record. Any BSON document may contain an `_id` field
+    /// of `bson::oid::ObjectId` type, it will then be used as a record id; otherwise,
+    /// a fresh identifier will be generated.
+    ///
+    /// # Failures
+    ///
+    /// Returns an error if saving of any of the provided documents has failed. As documents
+    /// are processed one by one, none of the documents after the failed one will be saved.
+    /// The error will contain a vector of identifiers of documents which has been saved
+    /// successfully.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[macro_use] extern crate ejdb;
+    /// # use ejdb::Database;
+    /// # fn main() {
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection("some_collection").unwrap();
+    /// coll.save_all(&[
+    ///     bson!{ "name" => "Foo", "count" => 123 },
+    ///     bson!{ "name" => "Bar", "items" => [4, 5, 6] }
+    /// ]).unwrap();
+    /// # }
+    /// ```
     pub fn save_all<I>(&self, docs: I) -> Result<Vec<oid::ObjectId>>
             where I: IntoIterator,
                   I::Item: Borrow<bson::Document> {
@@ -429,9 +568,38 @@ impl<'db> Collection<'db> {
         Ok(result)
     }
 
+    /// Prepares the provided query for execution.
+    ///
+    /// This method accepts a query object and returns a prepared query object which can
+    /// then be used to execute the query in various ways.
+    ///
+    /// The `query` argument may be of any type which can be borrowed into a `Query`, which
+    /// means that `query::Query` instances may be passed by value and by reference.
+    ///
+    /// # Examples
+    ///
+    /// Using the query API:
+    /// ```no_run
+    /// # use ejdb::Database;
+    /// use ejdb::query::Q;
+    ///
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection("some_collection").unwrap();
+    /// let query = coll.query(Q.field("name").eq("Foo"));
+    /// // work with the query object
+    /// ```
+    ///
+    /// Providing raw BSON document directly:
+    /// ```no_run
+    /// # use ejdb::Database;
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection("some_collection").unwrap();
+    /// let query = coll.query(bson! { "name" => "Foo" }.into());
+    /// // work with the query object
+    /// ```
     #[inline]
-    pub fn query<Q: Borrow<query::Query>>(&self, query: Q) -> Query<Q> {
-        Query {
+    pub fn query<Q: Borrow<query::Query>>(&self, query: Q) -> PreparedQuery<Q> {
+        PreparedQuery {
             coll: self,
             query: query,
             log_out: None
@@ -439,31 +607,141 @@ impl<'db> Collection<'db> {
     }
 }
 
-pub struct Query<'coll, 'db: 'coll, 'out, Q> {
+/// Represents a query which is ready to be executed.
+///
+/// This structure is created out of `query::Query` object and provides methods to perform
+/// queries in various ways. It is tied with a lifetime parameter to the collection this
+/// query is executed on and therefore cannot outlive it.
+///
+/// `PreparedQuery` is created using `Collection::query()` method.
+pub struct PreparedQuery<'coll, 'db: 'coll, 'out, Q> {
     coll: &'coll Collection<'db>,
     query: Q,
     log_out: Option<&'out mut io::Write>
 }
 
-impl<'coll, 'db, 'out, Q: Borrow<query::Query>> Query<'coll, 'db, 'out, Q> {
-    pub fn log_output<'o>(self, target: &'o mut (io::Write + 'o)) -> Query<'coll, 'db, 'o, Q> {
-        Query {
+impl<'coll, 'db, 'out, Q: Borrow<query::Query>> PreparedQuery<'coll, 'db, 'out, Q> {
+    /// Sets the provided writer as a logging target for this query.
+    ///
+    /// This method can be used to analyze how the query is executed. It is needed mostly for
+    /// debug purposes.
+    ///
+    /// Unfortunately, due to EJDB API design, the data will be written to the provided target
+    /// only after the query is executed entirely (and *if* it is executed at all).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[macro_use] extern crate ejdb;
+    /// # use ejdb::Database;
+    /// use ejdb::query::Query;
+    /// use std::io::Write;
+    ///
+    /// # fn main() {
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection("some_collection").unwrap();
+    ///
+    /// let mut log_data = Vec::new();
+    /// let query = coll.query(Query::from(bson! { "name" => "Foo" }))
+    ///     .log_output(&mut log_data);
+    /// // the query now will log to `log_data` vector when executed
+    /// # }
+    /// ```
+    pub fn log_output<'o>(self, target: &'o mut (io::Write + 'o)) -> PreparedQuery<'coll, 'db, 'o, Q> {
+        PreparedQuery {
             coll: self.coll,
             query: self.query,
             log_out: Some(target)
         }
     }
 
+    /// Executes the query, returning the affected number of records.
+    ///
+    /// This method is equivalent to `find().map(|r| r.len())` but more efficient because
+    /// it does not load the actual data from the database.
+    ///
+    /// Note that due to EJDB API structure this method is exactly equivalent to
+    /// `PreparedQuery::update()`, but it has its own name for semantic purposes.
+    ///
+    /// # Failures
+    ///
+    /// Returns an error if the query document can't be serialized to EJDB representation,
+    /// if writing to the output log has failed or if any of the underlying EJDB operations
+    /// can't be completed successfully.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::Database;
+    /// use ejdb::query::Q;
+    ///
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection("some_collection").unwrap();
+    /// let query = coll.query(Q.field("name").eq("Foo"));
+    /// let n = query.count().unwrap();
+    /// // n is the number of records with "name" field equal to "Foo"
+    /// ```
     #[inline]
     pub fn count(self) -> Result<u32> {
         self.execute(ejdb_sys::JBQRYCOUNT).map(|(_, n)| n)
     }
 
+    /// Executes the query which does not return results, returning the number of affected records.
+    ///
+    /// No data is loaded from the database when this method is executed, so it is primarily
+    /// needed for updating queries.
+    ///
+    /// Note that due to EJDB API structure this method is exactly equivalent to
+    /// `PreparedQuery::count()`, but it has its own name for semantic purposes.
+    ///
+    /// # Failures
+    ///
+    /// Returns an error if the query document can't be serialized to EJDB representation,
+    /// if writing to the output log has failed or if any of the underlying EJDB operations
+    /// can't be completed successfully.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::Database;
+    /// use ejdb::query::Q;
+    ///
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection("some_collection").unwrap();
+    /// let n = coll.query(Q.field("name").eq("Foo").set("count", 42)).update().unwrap();
+    /// // n is the number of records affected by the update
+    /// ```
     #[inline]
     pub fn update(self) -> Result<u32> {
         self.execute(ejdb_sys::JBQRYCOUNT).map(|(_, n)| n)
     }
 
+    /// Executes the query, returning the first matched element if it is available.
+    ///
+    /// This method executes the prepared query, returning only one element matching the query.
+    /// This is more efficient than `PreparedQuery::find()` method because only one object
+    /// is actually loaded from the database.
+    ///
+    /// # Failures
+    ///
+    /// Returns an error if the query document can't be serialized to EJDB representation,
+    /// if the returned document can't be deserialized from EJDB representation, if writing
+    /// to the output log has failed or if any of the underlying EJDB operations can't
+    /// be completed successfully.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::Database;
+    /// use ejdb::query::Q;
+    ///
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection("some_collection").unwrap();
+    /// match coll.query(Q.field("name").eq("Foo")).find_one().unwrap() {
+    ///     Some(doc) => { /* `doc` is the first record with "name" field equal to "Foo" */ }
+    ///     None => { /* no document with "name" equal to "Foo" has been found */ }
+    /// }
+    /// ```
     pub fn find_one(self) -> Result<Option<bson::Document>> {
         self.execute(ejdb_sys::JBQRYFINDONE)
             .map(|(r, n)| QueryResult { result: r, current: 0, total: n })
@@ -473,6 +751,30 @@ impl<'coll, 'db, 'out, Q: Borrow<query::Query>> Query<'coll, 'db, 'out, Q> {
             })
     }
 
+    /// Executes the query, returning an iterator of all documents matching the query.
+    ///
+    /// This method executes the prepared query and returns an iterator of all records which match
+    /// it. This is the main method to use if you need to access multiple elements from the
+    /// database.
+    ///
+    /// # Failures
+    ///
+    /// Returns an error if the query document can't be serialized to EJDB representation,
+    /// if writing to the output log has failed or if any of the underlying EJDB operations
+    /// can't be completed successfully. Each document from the query is deserialized from EJDB
+    /// representation separately when the iterator is traversed.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::Database;
+    /// use ejdb::query::Q;
+    ///
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection("some_collection").unwrap();
+    /// let result = coll.query(Q.field("name").eq("Foo")).find().unwrap();
+    /// let items: Result<Vec<_>, _> = result.collect();  // collect all found records into a vector
+    /// ```
     pub fn find(self) -> Result<QueryResult> {
         self.execute(0).map(|(r, n)| QueryResult { result: r, current: 0, total: n })
     }
@@ -513,7 +815,6 @@ impl<'coll, 'db, 'out, Q: Borrow<query::Query>> Query<'coll, 'db, 'out, Q> {
             query.0 = new_query;
         }
 
-        // TODO: actually use log output
         let mut log = if self.log_out.is_some() { Some(TCXString::new()) } else { None };
         let log_ptr = log.as_mut().map(|e| e.as_raw()).unwrap_or(ptr::null_mut());
 
@@ -525,10 +826,21 @@ impl<'coll, 'db, 'out, Q: Borrow<query::Query>> Query<'coll, 'db, 'out, Q> {
             return self.coll.db.last_error("error executing query");
         }
 
+        // dump the log to the output
+        match (log, self.log_out) {
+            (Some(log), Some(log_out)) => {
+                try!(log_out.write(&log));
+            }
+            _ => {}
+        }
+
         Ok((result, count))
     }
 }
 
+/// An iterator over EJDB query results.
+///
+/// Objects of this structure are returned by `PreparedQuery::find()` method.
 pub struct QueryResult {
     result: ejdb_sys::EJQRESULT,
     current: c_int,
@@ -536,6 +848,9 @@ pub struct QueryResult {
 }
 
 impl QueryResult {
+    /// Returns the number of records returned by the query.
+    ///
+    /// This iterator contains exactly `count()` elements.
     #[inline]
     pub fn count(&self) -> u32 { self.total }
 }
@@ -561,66 +876,6 @@ impl Iterator for QueryResult {
 
         let mut data = unsafe { slice::from_raw_parts(item, item_size as usize) };
         Some(bson::decode_document(&mut data).map_err(|e| e.into()))
-    }
-}
-
-pub struct Transaction<'coll, 'db: 'coll> {
-    coll: &'coll Collection<'db>,
-    commit: bool,
-    finished: bool
-}
-
-impl<'coll, 'db> Drop for Transaction<'coll, 'db> {
-    fn drop(&mut self) {
-        let _ = self.finish_mut();  // ignore the result
-    }
-}
-
-impl<'coll, 'db> Transaction<'coll, 'db> {
-    fn new(coll: &'coll Collection<'db>) -> Result<Transaction<'coll, 'db>> {
-        if unsafe { ejdb_sys::ejdbtranbegin(coll.coll) != 0 } {
-            coll.db.last_error("error opening transaction")
-        } else {
-            Ok(Transaction { coll: coll, commit: false, finished: false })
-        }
-    }
-
-    #[inline]
-    pub fn will_commit(&self) -> bool { self.commit }
-
-    #[inline]
-    pub fn will_abort(&self) -> bool { !self.commit }
-
-    #[inline]
-    pub fn set_commit(&mut self) { self.commit = true; }
-
-    #[inline]
-    pub fn set_abort(&mut self) { self.commit = false; }
-
-    #[inline]
-    pub fn finish(mut self) -> Result<()> { self.finish_mut() }
-
-    #[inline]
-    pub fn commit(mut self) -> Result<()> { self.commit_mut() }
-
-    #[inline]
-    pub fn abort(mut self) -> Result<()> { self.abort_mut() }
-
-    fn finish_mut(&mut self) -> Result<()> {
-        if self.finished { Ok(()) }
-        else { if self.commit { self.commit_mut() } else { self.abort_mut() } }
-    }
-
-    fn commit_mut(&mut self) -> Result<()> {
-        self.finished = true;
-        if unsafe { ejdb_sys::ejdbtrancommit(self.coll.coll) != 0 } { Ok(()) }
-        else { self.coll.db.last_error("error commiting transaction") }
-    }
-
-    fn abort_mut(&mut self) -> Result<()> {
-        self.finished = true;
-        if unsafe { ejdb_sys::ejdbtranabort(self.coll.coll) != 0 } { Ok(()) }
-        else { self.coll.db.last_error("error aborting transaction") }
     }
 }
 
