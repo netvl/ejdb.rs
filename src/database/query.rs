@@ -1,3 +1,5 @@
+//! Query API, a simple builder-like constructor for EJDB queries.
+
 use std::borrow::Cow;
 
 use bson::{Bson, Document};

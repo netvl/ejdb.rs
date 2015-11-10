@@ -22,6 +22,9 @@ pub mod query;
 pub mod meta;
 pub mod tx;
 
+/// Database open mode constants.
+///
+/// See `DatabaseOpenMode` for more information.
 pub mod open_mode {
     use ejdb_sys;
 

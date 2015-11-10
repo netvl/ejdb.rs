@@ -1,3 +1,11 @@
+//! Contains low-level utilities for conversion between Rust and EJDB BSON representations.
+//!
+//! This module is only public to facilitate direct usage of `ejdb-sys` library, if such
+//! need arises. The types provided here are useful for converting Rust BSON values
+//! to EJDB ones and vice versa.
+//!
+//! Types from this module should not be used unless absolutely necessary.
+
 use std::slice;
 
 use ejdb_sys;

@@ -1,3 +1,5 @@
+//! Various common types.
+
 use std::result;
 use std::borrow::Cow;
 use std::io;
@@ -7,11 +9,15 @@ use std::error;
 use bson::{self, oid};
 use itertools::Itertools;
 
+/// Default result type used in this library.
 pub type Result<T> = result::Result<T, Error>;
 
+/// A partial save error returned by `Collection::save_all()` method.
 #[derive(Debug)]
 pub struct PartialSave {
-    pub cause: Box<error::Error>,
+    /// The actual cause of the partial save error.
+    pub cause: Box<Error>,
+    /// A vector of object ids which have been inserted successfully.
     pub successful_ids: Vec<oid::ObjectId>
 }
 
@@ -51,32 +57,38 @@ impl fmt::Display for PartialSave {
 }
 
 quick_error! {
+    /// The main error type used in the library.
     #[derive(Debug)]
     pub enum Error {
+        /// I/O error.
         Io(err: io::Error) {
             from()
             description("I/O error")
             display("I/O error: {}", err)
             cause(err)
         }
+        /// BSON encoding error (when converting Rust BSON representation to the EJDB one).
         BsonEncoding(err: bson::EncoderError) {
             from()
             description("BSON encoding error")
             display("BSON encoding error: {}", err)
             cause(err)
         }
+        /// BSON decoding error (when converting to Rust BSON representation from the EJDB one).
         BsonDecoding(err: bson::DecoderError) {
             from()
             description("BSON decoding error")
             display("BSON decoding error: {}", err)
             cause(err)
         }
+        /// Partial save error returned by `Collection::save_all()` method.
         PartialSave(err: PartialSave) {
             from()
             description("partial save")
             display("partial save: {}", err)
             cause(&*err.cause)
         }
+        /// Some other error.
         Other(msg: Cow<'static, str>) {
             description(&*msg)
             display("{}", msg)
