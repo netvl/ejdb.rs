@@ -6,33 +6,51 @@ use bson::{Bson, Document};
 
 use utils::bson::BsonNumber;
 
+/// A container of EJDB query options.
+///
+/// This structure is a wrapper around a BSON document with various options affecting query
+/// execution in EJDB. It is a part of any query, but by default it is empty and has no effect.
+#[derive(Clone, PartialEq, Debug)]
 pub struct QueryHints {
     hints: Document
 }
 
 impl QueryHints {
+    /// Creates a new, empty query hints set.
     #[inline]
     pub fn new() -> QueryHints {
         QueryHints { hints: Document::new() }
     }
 
+    /// Sets the maximum number of entries which should be returned by the query.
+    ///
+    /// Corresponds to `$max` hint in EJDB query hints syntax.
     #[inline]
     pub fn max(mut self, n: i64) -> QueryHints {
         self.hints.insert("$max", n);
         self
     }
 
+    /// Sets the number of entries which should be skipped first when query results are inspected.
+    ///
+    /// Corresponds to `$skip` hint in EJDB query hints syntax.
     #[inline]
     pub fn skip(mut self, n: i64) -> QueryHints {
         self.hints.insert("$skip", n);
         self
     }
 
+    /// Returns a builder for ordering hint for the provided field.
+    ///
+    /// Corresponds to `$orderBy` hint in EJDB query hints syntax.
     #[inline]
     pub fn order_by<S: Into<String>>(self, field: S) -> QueryHintsOrderBy {
         QueryHintsOrderBy(self, field.into())
     }
 
+    /// Returns a builder for setting inclusion/exclusion flag of the provided field.
+    ///
+    /// Corresponds to `$fields` hint in EJDB query syntax.
     #[inline]
     pub fn field<S: Into<String>>(self, field: S) -> QueryHintsField {
         QueryHintsField(self, field.into())
@@ -52,6 +70,7 @@ impl QueryHints {
     }
 }
 
+/// A builder for ordering hint by a specific field.
 pub struct QueryHintsOrderBy(QueryHints, String);
 
 impl QueryHintsOrderBy {
@@ -60,30 +79,35 @@ impl QueryHintsOrderBy {
         self.0
     }
 
+    /// Sets that query results must be sorted by this field in descending order.
     #[inline]
     pub fn desc(self) -> QueryHints {
         self.add_hint(-1)
     }
 
+    /// Sets that query results must be sorted by this field in ascending order.
     #[inline]
     pub fn asc(self) -> QueryHints {
         self.add_hint(1)
     }
 }
 
+/// A builder for inclusion/exclusion flag for a specific field.
 pub struct QueryHintsField(QueryHints, String);
 
 impl QueryHintsField {
-    pub fn add_hint(mut self, value: i32) -> QueryHints {
+    fn add_hint(mut self, value: i32) -> QueryHints {
         self.0.add_hint("$fields", self.1, value);
         self.0
     }
 
+    /// Sets that query results must not contain a field with this name.
     #[inline]
     pub fn exclude(self) -> QueryHints {
         self.add_hint(-1)
     }
 
+    /// Sets that query results must contain a field with this name, if available.
     #[inline]
     pub fn include(self) -> QueryHints {
         self.add_hint(1)
@@ -97,6 +121,22 @@ impl Into<Document> for QueryHints {
     }
 }
 
+/// An entry point for constructing query hints.
+///
+/// This is a convenience API. This structure provides the same methods as `QueryHints`
+/// structure and inside them a fresh `QueryHints` instance is created and the corresponding
+/// method is called on it. This is the main approach for constructing query hints.
+///
+/// # Example
+///
+/// ```
+/// use ejdb::query::{QueryHints, QH};
+///
+/// assert_eq!(
+///     QueryHints::new().max(128).field("name").include().order_by("date").desc(),
+///     QH.max(128).field("name").include().order_by("date").desc()
+/// )
+/// ```
 pub struct QH;
 
 impl QH {
@@ -260,10 +300,10 @@ impl Query {
         self.add_subkey_at_key("$pull", key, value)
     }
 
-    pub fn pull_all<S, I, V>(self, key: S, values: I) -> Query
-            where S: Into<String>, V: Into<Bson>, I: IntoIterator<Item=V>
+    pub fn pull_all<S, I>(self, key: S, values: I) -> Query
+            where S: Into<String>, I: IntoIterator, I::Item: Into<Bson>
     {
-        let values: Vec<_> = values.into_iter().map(V::into).collect();
+        let values: Vec<_> = values.into_iter().map(I::Item::into).collect();
         self.add_subkey_at_key("$pullAll", key, values)
     }
 
@@ -271,10 +311,10 @@ impl Query {
         self.add_subkey_at_key("$push", key, value)
     }
 
-    pub fn push_all<S, I, V>(self, key: S, values: I) -> Query
-            where S: Into<String>, V: Into<Bson>, I: IntoIterator<Item=V>
+    pub fn push_all<S, I>(self, key: S, values: I) -> Query
+            where S: Into<String>, I: IntoIterator, I::Item: Into<Bson>
     {
-        let values: Vec<_> = values.into_iter().map(V::into).collect();
+        let values: Vec<_> = values.into_iter().map(I::Item::into).collect();
         self.add_subkey_at_key("$pushAll", key, values)
     }
 
