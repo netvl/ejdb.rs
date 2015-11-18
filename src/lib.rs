@@ -42,7 +42,34 @@
 //! which options collections have.
 //!
 //! A collection may be used to perform queries, initiate transactions or save/load BSON
-//! documents by their identifiers directly.
+//! documents by their identifiers directly, without using queries. Collection objects
+//! can also be used to manage indices.
+//!
+//! ## Saving/loading BSON documents
+//!
+//! You can use `Collection::save()` or `Collection::save_all()` methods to store BSON documents
+//! directly into the collection, and `Collection::load()` to load a document by its id:
+//!
+//! ```no_run
+//! # #[macro_use] extern crate ejdb;
+//! # use ejdb::Database;
+//! # fn main() {
+//! # let db = Database::open("/path/to/db").unwrap();
+//! # let coll = db.collection("some_collection").unwrap();
+//! let mut d = bson! {
+//!     "name" => "Foo Bar",
+//!     "count" => 10
+//! };
+//! let inserted_id = coll.save(&d).unwrap();
+//!
+//! d.insert("_id", inserted_id.clone());
+//! let d2 = coll.load(&inserted_id).unwrap().unwrap();
+//! assert_eq!(d, d2);
+//! # }
+//! ```
+//!
+//! If the `_id` field is not present in the BSON document, it will be generated and added
+//! automatically.
 //!
 //!   [EJDB]: http://ejdb.org/
 //!   [bson-rs]: https://crates.io/crates/bson

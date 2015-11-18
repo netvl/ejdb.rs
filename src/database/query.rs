@@ -280,8 +280,7 @@ impl Query {
     }
 
     fn merge_documents_at_key<K, D>(self, key: K, document: D) -> Query
-        where K: Into<String> + AsRef<str>,
-              D: Into<Document>
+        where K: Into<String> + AsRef<str>, D: Into<Document>
     {
         self.modify_document_at_key(
             key, document,
@@ -301,7 +300,7 @@ impl Query {
     ///
     /// Adds all items from `values` to the set (represented as a BSON array) at the field `key`.
     pub fn add_to_set_all<S, I>(self, key: S, values: I) -> Query
-            where S: Into<String>, I: IntoIterator, I::Item: Into<Bson>
+        where S: Into<String>, I: IntoIterator, I::Item: Into<Bson>
     {
         let values: Vec<_> = values.into_iter().map(I::Item::into).collect();
         self.add_subkey_at_key("$addToSet", key, values)
@@ -376,7 +375,7 @@ impl Query {
     /// Removes all values from `values` from an array at the field `key` in all matched records.
     /// Multiple `push_all()` calls will be merged.
     pub fn pull_all<S, I>(self, key: S, values: I) -> Query
-            where S: Into<String>, I: IntoIterator, I::Item: Into<Bson>
+        where S: Into<String>, I: IntoIterator, I::Item: Into<Bson>
     {
         let values: Vec<_> = values.into_iter().map(I::Item::into).collect();
         self.add_subkey_at_key("$pullAll", key, values)
@@ -395,7 +394,7 @@ impl Query {
     /// Appends all values from `values` to an array field `key` in all matched records. Multiple
     /// `push_all()` calls will be merged.
     pub fn push_all<S, I>(self, key: S, values: I) -> Query
-            where S: Into<String>, I: IntoIterator, I::Item: Into<Bson>
+        where S: Into<String>, I: IntoIterator, I::Item: Into<Bson>
     {
         let values: Vec<_> = values.into_iter().map(I::Item::into).collect();
         self.add_subkey_at_key("$pushAll", key, values)
@@ -479,7 +478,7 @@ impl FieldConstraint {
                 }
             }
             FieldConstraintData::Child(fc) => {
-                fc.process(bson!((self.0.into_owned()) => (value.into())))
+                fc.process(bson!(self.0.into_owned() => (value.into())))
             }
         }
     }
@@ -590,7 +589,15 @@ impl FieldConstraint {
         FieldConstraint("$not".into(), FieldConstraintData::Child(Box::new(self)))
     }
 
-    pub fn str_and<S: Into<String>, V: IntoIterator<Item=S>>(self, values: V) -> Query {
+    /// Adds an `$strand` constraint for this field.
+    ///
+    /// 1. If this field holds an array of strings, `$strand` returns those records whose
+    ///    array contains all elements from `values`.
+    /// 2. If this field holds a string, it is first split into an array by space `' '` or comma
+    ///    `','` characters, and the resulting array is queried like in 1.
+    pub fn str_and<I>(self, values: I) -> Query
+        where I: IntoIterator, I::Item: Into<String>
+    {
         self.process(bson! {
             "$strand" => (
                 values.into_iter().map(|v| v.into().into())  // S -> String -> Bson
@@ -599,7 +606,15 @@ impl FieldConstraint {
         })
     }
 
-    pub fn str_or<S: Into<String>, V: IntoIterator<Item=S>>(self, values: V) -> Query {
+    /// Adds an `$stror` constraint for this field.
+    ///
+    /// 1. If this field holds an array of strings, `$stror` returns those records whose
+    ///    array contains at least one element from `values`.
+    /// 2. If this field holds a string, it is first split into an array by space `' '` or comma
+    ///    `','` characters, and the resulting array is queried like in 1.
+    pub fn str_or<I>(self, values: I) -> Query
+        where I: IntoIterator, I::Item: Into<String>
+    {
         self.process(bson! {
             "$stror" => (
                 values.into_iter().map(|v| v.into().into())  // S -> String -> Bson
@@ -634,12 +649,12 @@ impl Q {
     }
 
     #[inline(always)]
-    pub fn and<I, V>(self, queries: I) -> Query where V: Into<Document>, I: IntoIterator<Item=V> {
+    pub fn and<I>(self, queries: I) -> Query where I: IntoIterator, I::Item: Into<Document> {
         Query::new().and(queries)
     }
 
     #[inline(always)]
-    pub fn or<I, V>(self, queries: I) -> Query where V: Into<Document>, I: IntoIterator<Item=V> {
+    pub fn or<I>(self, queries: I) -> Query where I: IntoIterator, I::Item: Into<Document> {
         Query::new().or(queries)
     }
 
@@ -664,7 +679,9 @@ impl Q {
     }
 
     #[inline(always)]
-    pub fn add_to_set_all<S, I, V>(self, key: S, values: I) -> Query where S: Into<String>, V: Into<Bson>, I: IntoIterator<Item=V> {
+    pub fn add_to_set_all<S, I>(self, key: S, values: I) -> Query
+        where S: Into<String>, I: IntoIterator, I::Item: Into<Bson>
+    {
         Query::new().add_to_set_all(key, values)
     }
 
@@ -709,7 +726,9 @@ impl Q {
     }
 
     #[inline(always)]
-    pub fn pull_all<S, I, V>(self, key: S, values: I) -> Query where S: Into<String>, V: Into<Bson>, I: IntoIterator<Item=V> {
+    pub fn pull_all<S, I>(self, key: S, values: I) -> Query
+        where S: Into<String>, I: IntoIterator, I::Item: Into<Bson>
+    {
         Query::new().pull_all(key, values)
     }
 
@@ -719,7 +738,9 @@ impl Q {
     }
 
     #[inline(always)]
-    pub fn push_all<S, I, V>(self, key: S, values: I) -> Query where S: Into<String>, V: Into<Bson>, I: IntoIterator<Item=V> {
+    pub fn push_all<S, I>(self, key: S, values: I) -> Query
+        where S: Into<String>, I: IntoIterator, I::Item: Into<Bson>
+    {
         Query::new().push_all(key, values)
     }
 
@@ -737,7 +758,6 @@ impl Q {
     pub fn slice_with_offset<S: Into<String>>(self, key: S, offset: i64, limit: i64) -> Query {
         Query::new().slice_with_offset(key, offset, limit)
     }
-
 }
 
 #[cfg(test)]

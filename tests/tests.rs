@@ -86,21 +86,21 @@ fn test_save_load() {
     ]).unwrap();
     assert_eq!(ids.len(), 3);
 
-    let item_1 = coll.load(ids[0].clone()).unwrap().unwrap();
+    let item_1 = coll.load(&ids[0]).unwrap().unwrap();
     assert_eq!(item_1, bson! {
         "_id" => (ids[0].clone()),
         "name" => "Foo",
         "count" => 123
     });
 
-    let item_2 = coll.load(ids[1].clone()).unwrap().unwrap();
+    let item_2 = coll.load(&ids[1]).unwrap().unwrap();
     assert_eq!(item_2, bson! {
         "_id" => (ids[1].clone()),
         "name" => "Bar",
         "items" => [1, "hello", 42.3]
     });
 
-    let item_3 = coll.load(ids[2].clone()).unwrap().unwrap();
+    let item_3 = coll.load(&ids[2]).unwrap().unwrap();
     assert_eq!(item_3, bson! {
         "_id" => (ids[2].clone()),
         "title" => "Baz",

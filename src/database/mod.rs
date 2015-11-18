@@ -510,11 +510,11 @@ impl<'db> Collection<'db> {
     /// # use ejdb::bson::oid::ObjectId;
     /// let db = Database::open("/path/to/db").unwrap();
     /// let coll = db.collection("some_collection").unwrap();
-    /// let value = coll.load(ObjectId::with_string("1234567890abcdef0987feab").unwrap()).unwrap();
+    /// let value = coll.load(&ObjectId::with_string("1234567890abcdef0987feab").unwrap()).unwrap();
     /// // value is ejdb::bson::Document
     /// ```
-    pub fn load(&self, id: oid::ObjectId) -> Result<Option<bson::Document>> {
-        let ejdb_oid: EjdbObjectId = id.into();
+    pub fn load(&self, id: &oid::ObjectId) -> Result<Option<bson::Document>> {
+        let ejdb_oid: EjdbObjectId = id.clone().into();
         let result = unsafe { ejdb_sys::ejdbloadbson(self.coll, ejdb_oid.as_raw()) };
         if result.is_null() {
             if self.db.last_error_msg().is_none() { Ok(None) }
