@@ -783,7 +783,7 @@ impl<'coll, 'db, 'out, Q: Borrow<query::Query>> PreparedQuery<'coll, 'db, 'out, 
     }
 
     fn execute(self, flags: u32) -> Result<(ejdb_sys::EJQRESULT, u32)> {
-        let (hints, query) = self.query.borrow().build_ref();
+        let (hints, query) = self.query.borrow().as_bson();
 
         let mut query_doc = Vec::new();
         try!(bson::encode_document(&mut query_doc, query));

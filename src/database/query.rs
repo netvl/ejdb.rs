@@ -428,13 +428,13 @@ impl Query {
 
     /// Converts this query to a pair of BSON documents, a query and a set of query hints.
     #[inline]
-    pub fn build(self) -> (Document, Document) {
+    pub fn into_bson(self) -> (Document, Document) {
         (self.hints.into(), self.query)
     }
 
     /// Returns references to the current query and the current set of query hints.
     #[inline]
-    pub fn build_ref(&self) -> (&Document, &Document) {
+    pub fn as_bson(&self) -> (&Document, &Document) {
         (&self.hints.hints, &self.query)
     }
 }
@@ -771,7 +771,7 @@ mod tests {
         let (_, q) = Q.and(vec![
             Q.field("a").eq(1),
             Q.field("b").eq("c")
-        ]).build();
+        ]).into_bson();
         assert_eq!(q, bson! {
             "$and" => [
                 { "a" => 1 },
@@ -785,7 +785,7 @@ mod tests {
         let (_, q) = Q.or(vec![
             Q.field("a").eq(1),
             Q.field("b").contained_in(vec!["d", "e", "f"])
-        ]).build();
+        ]).into_bson();
         assert_eq!(q, bson! {
             "$or" => [
                 { "a" => 1 },
@@ -800,7 +800,7 @@ mod tests {
             .field("_id").eq("12345")
             .join("user", "users")
             .join("tag", "tags")
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "_id" => "12345",
             "$do" => {
@@ -814,7 +814,7 @@ mod tests {
     fn test_add_to_set() {
         let (_, q) = Q.field("_id").eq(12345)
             .add_to_set("tag", "new tag")
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "_id"=> 12345,
             "$addToSet" => {
@@ -825,7 +825,7 @@ mod tests {
 
     #[test]
     fn test_add_to_set_all() {
-        let (_, q) = Q.add_to_set_all("tag", vec!["tag 1", "tag 2", "tag 3"]).build();
+        let (_, q) = Q.add_to_set_all("tag", vec!["tag 1", "tag 2", "tag 3"]).into_bson();
         assert_eq!(q, bson! {
             "$addToSet" => {
                 "tag" => [ "tag 1", "tag 2", "tag 3" ]
@@ -838,7 +838,7 @@ mod tests {
         let (_, q) = Q.id(12345)
             .unset("some_field")
             .unset("another_field")
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "_id" => 12345,
             "$unset" => {
@@ -850,7 +850,7 @@ mod tests {
 
     #[test]
     fn test_inc() {
-        let (_, q) = Q.id(12345).inc("x", 12).inc("y", -13i64).inc("z", 14.5).build();
+        let (_, q) = Q.id(12345).inc("x", 12).inc("y", -13i64).inc("z", 14.5).into_bson();
         assert_eq!(q, bson! {
             "_id" => 12345,
             "$inc" => {
@@ -863,7 +863,7 @@ mod tests {
 
     #[test]
     fn test_drop_all() {
-        let (_, q) = Q.field("x").between(-42, 42.5).drop_all().build();
+        let (_, q) = Q.field("x").between(-42, 42.5).drop_all().into_bson();
         assert_eq!(q, bson! {
             "x" => { "$bt" => [ (-42), 42.5 ] },
             "$dropall" => true
@@ -879,7 +879,7 @@ mod tests {
                 "name" => "my book"
             })
             .upsert("another_field", "another_value")
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "isbn" => "0123456789",
             "$upsert" => {
@@ -896,7 +896,7 @@ mod tests {
             .set("x", 12)
             .set_many(bson! { "a" => "x", "b" => "y" })  // overwrites
             .set("y", 34)
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "_id" => 12345,
             "$set" => {
@@ -912,7 +912,7 @@ mod tests {
         let (_, q) = Q.id(12345)
             .pull("xs", 12)
             .pull_all("ys", bson![34, 56.7])
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "_id" => 12345,
             "$pull" => {
@@ -929,7 +929,7 @@ mod tests {
         let (_, q) = Q.id(12345)
             .push("xs", "a")
             .push_all("ys", bson!["w", "v"])
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "_id" => 12345,
             "$push" => {
@@ -943,7 +943,7 @@ mod tests {
 
     #[test]
     fn test_rename() {
-        let (_, q) = Q.id("12345").rename("input", "output").rename("alpha", "omega").build();
+        let (_, q) = Q.id("12345").rename("input", "output").rename("alpha", "omega").into_bson();
         assert_eq!(q, bson! {
             "_id" => "12345",
             "$rename" => {
@@ -958,7 +958,7 @@ mod tests {
         let (_, q) = Q.id(12345)
             .slice("array", 123)
             .slice_with_offset("array_2", 456, 789)
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "_id" => 12345,
             "$do" => {
@@ -970,7 +970,7 @@ mod tests {
 
     #[test]
     fn test_field_field() {
-        let (_, q) = Q.field("a").field("b").field("c").eq(12345).build();
+        let (_, q) = Q.field("a").field("b").field("c").eq(12345).into_bson();
         assert_eq!(q, bson! {
             "a" => { "b" => { "c" => 12345 } }
         });
@@ -978,7 +978,7 @@ mod tests {
 
     #[test]
     fn test_field_eq() {
-        let (_, q) = Q.field("_id").eq(ObjectId::with_timestamp(128)).build();
+        let (_, q) = Q.field("_id").eq(ObjectId::with_timestamp(128)).into_bson();
         assert_eq!(q, bson! {
             "_id" => (ObjectId::with_timestamp(128))
         });
@@ -986,7 +986,7 @@ mod tests {
 
     #[test]
     fn test_field_begin() {
-        let (_, q) = Q.field("name").begin("something").build();
+        let (_, q) = Q.field("name").begin("something").into_bson();
         assert_eq!(q, bson! {
             "name" => {
                 "$begin" => "something"
@@ -996,7 +996,7 @@ mod tests {
 
     #[test]
     fn test_field_between() {
-        let (_, q) = Q.field("x").between(0.1, 123i64).build();
+        let (_, q) = Q.field("x").between(0.1, 123i64).into_bson();
         assert_eq!(q, bson! {
             "x" => {
                 "$bt" => [ 0.1, 123i64 ]
@@ -1009,7 +1009,7 @@ mod tests {
         let (_, q) = Q
             .field("x").gt(0.1)
             .field("x").lt(9.9)
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "x" => {
                 "$gt" => 0.1,
@@ -1023,7 +1023,7 @@ mod tests {
         let (_, q) = Q
             .field("y").gte(1)
             .field("y").lte(99)
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "y" => {
                 "$gte" => 1,
@@ -1037,7 +1037,7 @@ mod tests {
         let (_, q) = Q
             .field("name").exists(true)
             .field("wat").exists(false)
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "name" => { "$exists" => true },
             "wat" => { "$exists" => false }
@@ -1048,7 +1048,7 @@ mod tests {
     fn test_field_elem_match() {
         let (_, q) = Q
             .field("props").elem_match(bson! { "a" => 1, "b" => "c" })
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "props" => {
                 "$elemMatch" => {
@@ -1064,7 +1064,7 @@ mod tests {
         let (_, q) = Q
             .field("x").contained_in(vec![1, 2, 3])
             .field("y").not_contained_in(vec![7, 8, 9])
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "x" => {
                 "$in" => [1, 2, 3]
@@ -1080,7 +1080,7 @@ mod tests {
         let (_, q) = Q
             .field("msg").case_insensitive().eq("hello world")
             .field("err").case_insensitive().contained_in(vec!["whatever", "pfff"])
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "msg" => {
                 "$icase" => "hello world"
@@ -1098,7 +1098,7 @@ mod tests {
         let (_, q) = Q
             .field("x").not().eq(42)
             .field("y").not().between(10.0, 20.32)
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "x" => {
                 "$not" => 42
@@ -1116,7 +1116,7 @@ mod tests {
         let (_, q) = Q
             .field("name").str_and(["me", "xyzzy", "wab"].iter().cloned())
             .field("title").str_or(["foo", "bar", "baz"].iter().cloned())
-            .build();
+            .into_bson();
         assert_eq!(q, bson! {
             "name" => {
                 "$strand" => [ "me", "xyzzy", "wab" ]
@@ -1129,13 +1129,13 @@ mod tests {
 
     #[test]
     fn test_hints_empty() {
-        let (qh, _) = Q.hints(QueryHints::new()).build();
+        let (qh, _) = Q.hints(QueryHints::new()).into_bson();
         assert!(qh.is_empty());
     }
 
     #[test]
     fn test_hints_max() {
-        let (qh, _) = Q.hints(QH.max(12)).build();
+        let (qh, _) = Q.hints(QH.max(12)).into_bson();
         assert_eq!(qh, bson! {
             "$max" => 12i64
         });

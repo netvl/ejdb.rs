@@ -52,6 +52,29 @@ impl<'db> Collection<'db> {
 
 }
 
+/// Represents an active transaction.
+///
+/// This structure is a transaction guard for an EJDB collection. It employs RAII pattern:
+/// a value of this structure is returned when transaction is started and when this value
+/// is dropped, the transaction is committed or aborted.
+///
+/// By default when a transaction goes out of scope, it is aborted. This is done because
+/// of the way how errors are handled in Rust: if you interleave working with an EJDB collection
+/// with other, potentially failing operations, then it is possible for an error to cause
+/// an early return, dropping the transaction in progress. In this case aborting the transaction
+/// is usually the most natural option.
+///
+/// However, it is possible to change the default behavior with `set_commit()/set_abort()` methods,
+/// and it is also possible to commit or abort the transaction with `commit()`/`abort()` methods.
+/// `finish()` method is essentially equivalent to dropping the transaction guard, except that
+/// it returns a value which may contain an error (for regular drops any errors are ignord).
+/// `will_commit()`/`will_abort()` methods will `true` if their respective action will be taken
+/// upon finishing.
+///
+/// In EJDB transactions can only span one collection, therefore transactions created from a
+/// collection has a direct lifetime dependency on it.
+///
+/// See `Collection::begin_transaction()` documentation for examples.
 pub struct Transaction<'coll, 'db: 'coll> {
     coll: &'coll Collection<'db>,
     commit: bool,
@@ -73,24 +96,39 @@ impl<'coll, 'db> Transaction<'coll, 'db> {
         }
     }
 
+    /// Checks whether this transaction will be committed upon drop.
+    ///
+    /// Returns `true` if this transaction will be committed when dropped or when `finish()`
+    /// method is called.
     #[inline]
     pub fn will_commit(&self) -> bool { self.commit }
 
+    /// Checks whether this transaction will be aborted upon drop.
+    ///
+    /// Returns `true` if this transaction will be aborted when dropped or when `finish()`
+    /// method is called.
     #[inline]
     pub fn will_abort(&self) -> bool { !self.commit }
 
+    /// Makes this transaction to commit when dropped.
     #[inline]
     pub fn set_commit(&mut self) { self.commit = true; }
 
+    /// Makes this transaction to abort when dropped.
     #[inline]
     pub fn set_abort(&mut self) { self.commit = false; }
 
+    /// Aborts or commits the transaction depending on the finish mode.
+    ///
+    /// The mode can be changed with `set_commit()` and `set_abort()` methods.
     #[inline]
     pub fn finish(mut self) -> Result<()> { self.finish_mut() }
 
+    /// Attempts to commit this transaction.
     #[inline]
     pub fn commit(mut self) -> Result<()> { self.commit_mut() }
 
+    /// Attempts to abort this transaction.
     #[inline]
     pub fn abort(mut self) -> Result<()> { self.abort_mut() }
 
