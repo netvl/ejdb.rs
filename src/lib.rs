@@ -71,6 +71,20 @@
 //! If the `_id` field is not present in the BSON document, it will be generated and added
 //! automatically.
 //!
+//! `Collection::save_all()` method is implemented over `Collection::save()` and returns a
+//! special kind of error which contains information about errors for each save operation,
+//! if any.
+//!
+//! ## Performing queries
+//!
+//! EJDB supports a pretty large subset of operations provided by MongoDB, and even has
+//! its own unique queries, like joins.
+//!
+//! Queries are perfomed with `Collection::query()` method which accepts anything which can be
+//! borrowed into a `Query`. `Query` consists of two parts: the actual query, i.e. constraints
+//! on the data in a collection, and query hints which alter the way the query is processed
+//! and returned. `Query` contains both of these parts, 
+//!
 //!   [EJDB]: http://ejdb.org/
 //!   [bson-rs]: https://crates.io/crates/bson
 

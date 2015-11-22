@@ -584,11 +584,11 @@ impl<'db> Collection<'db> {
     /// Using the query API:
     /// ```no_run
     /// # use ejdb::Database;
-    /// use ejdb::query::Q;
+    /// use ejdb::query::{Q, QH};
     ///
     /// let db = Database::open("/path/to/db").unwrap();
     /// let coll = db.collection("some_collection").unwrap();
-    /// let query = coll.query(Q.field("name").eq("Foo"));
+    /// let query = coll.query(Q.field("name", QH.empty()).eq("Foo"));
     /// // work with the query object
     /// ```
     ///
@@ -601,10 +601,13 @@ impl<'db> Collection<'db> {
     /// // work with the query object
     /// ```
     #[inline]
-    pub fn query<Q: Borrow<query::Query>>(&self, query: Q) -> PreparedQuery<Q> {
+    pub fn query<Q, H>(&self, query: Q, hints: H) -> PreparedQuery<Q, H>
+        where Q: Borrow<query::Query>, H: Borrow<query::QueryHints>
+    {
         PreparedQuery {
             coll: self,
             query: query,
+            hints: hints,
             log_out: None
         }
     }
@@ -617,13 +620,16 @@ impl<'db> Collection<'db> {
 /// query is executed on and therefore cannot outlive it.
 ///
 /// `PreparedQuery` is created using `Collection::query()` method.
-pub struct PreparedQuery<'coll, 'db: 'coll, 'out, Q> {
+pub struct PreparedQuery<'coll, 'db: 'coll, 'out, Q, H> {
     coll: &'coll Collection<'db>,
     query: Q,
+    hints: H,
     log_out: Option<&'out mut io::Write>
 }
 
-impl<'coll, 'db, 'out, Q: Borrow<query::Query>> PreparedQuery<'coll, 'db, 'out, Q> {
+impl<'coll, 'db, 'out, Q, H> PreparedQuery<'coll, 'db, 'out, Q, H>
+    where Q: Borrow<query::Query>, H: Borrow<query::QueryHints>
+{
     /// Sets the provided writer as a logging target for this query.
     ///
     /// This method can be used to analyze how the query is executed. It is needed mostly for
@@ -637,7 +643,7 @@ impl<'coll, 'db, 'out, Q: Borrow<query::Query>> PreparedQuery<'coll, 'db, 'out, 
     /// ```no_run
     /// # #[macro_use] extern crate ejdb;
     /// # use ejdb::Database;
-    /// use ejdb::query::Query;
+    /// use ejdb::query::{Q, QH};
     /// use std::io::Write;
     ///
     /// # fn main() {
@@ -645,15 +651,16 @@ impl<'coll, 'db, 'out, Q: Borrow<query::Query>> PreparedQuery<'coll, 'db, 'out, 
     /// let coll = db.collection("some_collection").unwrap();
     ///
     /// let mut log_data = Vec::new();
-    /// let query = coll.query(Query::from(bson! { "name" => "Foo" }))
+    /// let query = coll.query(Q.field("name").eq("Foo"), QH.empty())
     ///     .log_output(&mut log_data);
     /// // the query now will log to `log_data` vector when executed
     /// # }
     /// ```
-    pub fn log_output<'o>(self, target: &'o mut (io::Write + 'o)) -> PreparedQuery<'coll, 'db, 'o, Q> {
+    pub fn log_output<'o>(self, target: &'o mut (io::Write + 'o)) -> PreparedQuery<'coll, 'db, 'o, Q, H> {
         PreparedQuery {
             coll: self.coll,
             query: self.query,
+            hints: self.hints,
             log_out: Some(target)
         }
     }
@@ -676,11 +683,11 @@ impl<'coll, 'db, 'out, Q: Borrow<query::Query>> PreparedQuery<'coll, 'db, 'out, 
     ///
     /// ```no_run
     /// # use ejdb::Database;
-    /// use ejdb::query::Q;
+    /// use ejdb::query::{Q, QH};
     ///
     /// let db = Database::open("/path/to/db").unwrap();
     /// let coll = db.collection("some_collection").unwrap();
-    /// let query = coll.query(Q.field("name").eq("Foo"));
+    /// let query = coll.query(Q.field("name").eq("Foo"), QH.empty());
     /// let n = query.count().unwrap();
     /// // n is the number of records with "name" field equal to "Foo"
     /// ```
@@ -707,11 +714,12 @@ impl<'coll, 'db, 'out, Q: Borrow<query::Query>> PreparedQuery<'coll, 'db, 'out, 
     ///
     /// ```no_run
     /// # use ejdb::Database;
-    /// use ejdb::query::Q;
+    /// use ejdb::query::{Q, QH};
     ///
     /// let db = Database::open("/path/to/db").unwrap();
     /// let coll = db.collection("some_collection").unwrap();
-    /// let n = coll.query(Q.field("name").eq("Foo").set("count", 42)).update().unwrap();
+    /// let n = coll.query(Q.field("name").eq("Foo").set("count", 42), QH.empty())
+    ///     .update().unwrap();
     /// // n is the number of records affected by the update
     /// ```
     #[inline]
@@ -736,11 +744,11 @@ impl<'coll, 'db, 'out, Q: Borrow<query::Query>> PreparedQuery<'coll, 'db, 'out, 
     ///
     /// ```no_run
     /// # use ejdb::Database;
-    /// use ejdb::query::Q;
+    /// use ejdb::query::{Q, QH};
     ///
     /// let db = Database::open("/path/to/db").unwrap();
     /// let coll = db.collection("some_collection").unwrap();
-    /// match coll.query(Q.field("name").eq("Foo")).find_one().unwrap() {
+    /// match coll.query(Q.field("name").eq("Foo"), QH.empty()).find_one().unwrap() {
     ///     Some(doc) => { /* `doc` is the first record with "name" field equal to "Foo" */ }
     ///     None => { /* no document with "name" equal to "Foo" has been found */ }
     /// }
@@ -771,11 +779,11 @@ impl<'coll, 'db, 'out, Q: Borrow<query::Query>> PreparedQuery<'coll, 'db, 'out, 
     ///
     /// ```no_run
     /// # use ejdb::Database;
-    /// use ejdb::query::Q;
+    /// use ejdb::query::{Q, QH};
     ///
     /// let db = Database::open("/path/to/db").unwrap();
     /// let coll = db.collection("some_collection").unwrap();
-    /// let result = coll.query(Q.field("name").eq("Foo")).find().unwrap();
+    /// let result = coll.query(Q.field("name").eq("Foo"), QH.empty()).find().unwrap();
     /// let items: Result<Vec<_>, _> = result.collect();  // collect all found records into a vector
     /// ```
     pub fn find(self) -> Result<QueryResult> {
@@ -783,7 +791,8 @@ impl<'coll, 'db, 'out, Q: Borrow<query::Query>> PreparedQuery<'coll, 'db, 'out, 
     }
 
     fn execute(self, flags: u32) -> Result<(ejdb_sys::EJQRESULT, u32)> {
-        let (hints, query) = self.query.borrow().as_bson();
+        let query = self.query.borrow().as_bson();
+        let hints = self.hints.borrow().as_bson();
 
         let mut query_doc = Vec::new();
         try!(bson::encode_document(&mut query_doc, query));
@@ -897,7 +906,7 @@ fn test_save() {
 #[test]
 #[ignore]
 fn test_find() {
-    use query::Q;
+    use query::{Q, QH};
 
     let db = Database::open("/tmp/test_database").unwrap();
     let coll = db.collection("example_collection").unwrap();
@@ -910,13 +919,13 @@ fn test_find() {
 
     let q = Q.field("age").gte(25);
 
-    for item in coll.query(&q).find().unwrap() {
+    for item in coll.query(&q, QH.empty()).find().unwrap() {
         println!("{}", item.unwrap());
     }
 
-    let count = coll.query(&q).count().unwrap();
+    let count = coll.query(&q, QH.empty()).count().unwrap();
     println!("Count: {}", count);
 
-    let one = coll.query(&q).find_one().unwrap();
+    let one = coll.query(&q, QH.empty()).find_one().unwrap();
     println!("One: {}", one.unwrap());
 }

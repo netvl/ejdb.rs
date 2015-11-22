@@ -1,6 +1,7 @@
 //! Query API, a simple builder-like constructor for EJDB queries.
 
 use std::borrow::Cow;
+use std::ops::{Deref, DerefMut};
 
 use bson::{Bson, Document};
 
@@ -9,7 +10,14 @@ use utils::bson::BsonNumber;
 /// A container of EJDB query options.
 ///
 /// This structure is a wrapper around a BSON document with various options affecting query
-/// execution in EJDB. It is a part of any query, but by default it is empty and has no effect.
+/// execution in EJDB. It implements `Deref<Target=bson::Document>` and `DerefMut`, therefore
+/// it is possible to work with it as a BSON document directly. It also has
+/// `into_bson()`/`as_bson()` methods and `Into<bson::Document>`/`From<bson::Document>`
+/// implemenations. If an invalid document is constructed and passed as a hints map when
+/// executing a query, an error will be returned.
+///
+/// Query hints are a part of any query operation and are passed with the actual query to
+/// `Collection::query()` method; they can be empty if the default behavior is sufficient.
 #[derive(Clone, PartialEq, Debug)]
 pub struct QueryHints {
     hints: Document
@@ -68,6 +76,26 @@ impl QueryHints {
             }
         }
     }
+
+    /// Converts these hints to a BSON document.
+    #[inline]
+    pub fn into_bson(self) -> Document {
+        self.hints
+    }
+
+    /// Returns a reference to these hints as a BSON document.
+    #[inline]
+    pub fn as_bson(&self) -> &Document {
+        &self.hints
+    }
+
+    /// Returns a mutable reference to these hints as a BSON document.
+    ///
+    /// Be careful when modifying the document directly because it may lead to invalid hints.
+    #[inline]
+    pub fn as_bson_mut(&mut self) -> &mut Document {
+        &mut self.hints
+    }
 }
 
 /// A builder for ordering hint by a specific field.
@@ -114,11 +142,30 @@ impl QueryHintsField {
     }
 }
 
+impl From<Document> for QueryHints {
+    #[inline]
+    fn from(document: Document) -> QueryHints {
+        QueryHints {
+            hints: document
+        }
+    }
+}
+
 impl Into<Document> for QueryHints {
     #[inline]
-    fn into(self) -> Document {
-        self.hints
-    }
+    fn into(self) -> Document { self.hints }
+}
+
+impl Deref for QueryHints {
+    type Target = Document;
+
+    #[inline]
+    fn deref(&self) -> &Document { self.as_bson() }
+}
+
+impl DerefMut for QueryHints {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Document { self.as_bson_mut() }
 }
 
 /// An entry point for constructing query hints.
@@ -140,6 +187,11 @@ impl Into<Document> for QueryHints {
 pub struct QH;
 
 impl QH {
+    #[inline(always)]
+    pub fn empty(self) -> QueryHints {
+        QueryHints::new()
+    }
+
     #[inline(always)]
     pub fn max(self, n: i64) -> QueryHints {
         QueryHints::new().max(n)
@@ -169,7 +221,15 @@ impl QH {
 /// A query internally is a BSON document of a [certain format][queries], very similar to
 /// MongoDB queries. This structure provides convenience methods to build such document.
 /// Additionally, a query may have hints, i.e. non-data parameters affecting its behavior.
-/// These are also encapsulated here.
+/// These parameters are encapsulated in the `QueryHints` structure and are passed to the
+/// `Collection::query()` method separately.
+///
+/// This structure implements `Deref<Target=bson::Document>` and `DerefMut`, and it also
+/// has `as_bson()`/`as_bson_mut()`/`into_bson()` methods and
+/// `Into<bson::Document>`/`From<bson::Document>` implementations, so it is possible to
+/// work with the query as with a regular BSON document. Note, however, that an invalid
+/// query will result in an error when it is executed, so it is recommended to use the
+/// builder API to construct queries.
 ///
 /// Most of the building methods here are as generic as possible; e.g. they take `Into<String>`
 /// instead of `&str` or `String`; same with iterable objects. This is done for maximum
@@ -178,7 +238,6 @@ impl QH {
 ///   [queries]: http://ejdb.org/doc/ql/ql.html
 #[derive(Clone, PartialEq, Debug)]
 pub struct Query {
-    hints: QueryHints,
     query: Document
 }
 
@@ -189,15 +248,8 @@ impl Query {
     #[inline]
     pub fn new() -> Query {
         Query {
-            hints: QueryHints::new(),
             query: Document::new()
         }
-    }
-
-    /// Sets hints for this query.
-    pub fn hints(mut self, hints: QueryHints) -> Query {
-        self.hints = hints;
-        self
     }
 
     /// Builds `$and` query.
@@ -426,16 +478,24 @@ impl Query {
         )
     }
 
-    /// Converts this query to a pair of BSON documents, a query and a set of query hints.
+    /// Converts this query to a BSON document.
     #[inline]
-    pub fn into_bson(self) -> (Document, Document) {
-        (self.hints.into(), self.query)
+    pub fn into_bson(self) -> Document {
+        self.query
     }
 
-    /// Returns references to the current query and the current set of query hints.
+    /// Returns a reference to this query as a BSON document.
     #[inline]
-    pub fn as_bson(&self) -> (&Document, &Document) {
-        (&self.hints.hints, &self.query)
+    pub fn as_bson(&self) -> &Document {
+        &self.query
+    }
+
+    /// Returns a mutable reference to this query as a BSON document.
+    ///
+    /// Be careful when modifying the document directly because it may lead to invalid queries.
+    #[inline]
+    pub fn as_bson_mut(&mut self) -> &mut Document {
+        &mut self.query
     }
 }
 
@@ -443,8 +503,7 @@ impl From<Document> for Query {
     #[inline]
     fn from(document: Document) -> Query {
         Query {
-            query: document,
-            hints: QueryHints::new()
+            query: document
         }
     }
 }
@@ -452,6 +511,18 @@ impl From<Document> for Query {
 impl Into<Document> for Query {
     #[inline]
     fn into(self) -> Document { self.query }
+}
+
+impl Deref for Query {
+    type Target = Document;
+
+    #[inline]
+    fn deref(&self) -> &Document { self.as_bson() }
+}
+
+impl DerefMut for Query {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Document { self.as_bson_mut() }
 }
 
 enum FieldConstraintData {
@@ -644,8 +715,8 @@ pub struct Q;
 
 impl Q {
     #[inline(always)]
-    pub fn hints(self, hints: QueryHints) -> Query {
-        Query::new().hints(hints)
+    pub fn empty(self) -> Query {
+        Query::new()
     }
 
     #[inline(always)]
@@ -768,7 +839,7 @@ mod tests {
 
     #[test]
     fn test_and() {
-        let (_, q) = Q.and(vec![
+        let q = Q.and(vec![
             Q.field("a").eq(1),
             Q.field("b").eq("c")
         ]).into_bson();
@@ -782,7 +853,7 @@ mod tests {
 
     #[test]
     fn test_or() {
-        let (_, q) = Q.or(vec![
+        let q = Q.or(vec![
             Q.field("a").eq(1),
             Q.field("b").contained_in(vec!["d", "e", "f"])
         ]).into_bson();
@@ -796,7 +867,7 @@ mod tests {
 
     #[test]
     fn test_join() {
-        let (_, q) = Q
+        let q = Q
             .field("_id").eq("12345")
             .join("user", "users")
             .join("tag", "tags")
@@ -812,7 +883,7 @@ mod tests {
 
     #[test]
     fn test_add_to_set() {
-        let (_, q) = Q.field("_id").eq(12345)
+        let q = Q.field("_id").eq(12345)
             .add_to_set("tag", "new tag")
             .into_bson();
         assert_eq!(q, bson! {
@@ -825,7 +896,7 @@ mod tests {
 
     #[test]
     fn test_add_to_set_all() {
-        let (_, q) = Q.add_to_set_all("tag", vec!["tag 1", "tag 2", "tag 3"]).into_bson();
+        let q = Q.add_to_set_all("tag", vec!["tag 1", "tag 2", "tag 3"]).into_bson();
         assert_eq!(q, bson! {
             "$addToSet" => {
                 "tag" => [ "tag 1", "tag 2", "tag 3" ]
@@ -835,7 +906,7 @@ mod tests {
 
     #[test]
     fn test_unset() {
-        let (_, q) = Q.id(12345)
+        let q = Q.id(12345)
             .unset("some_field")
             .unset("another_field")
             .into_bson();
@@ -850,7 +921,7 @@ mod tests {
 
     #[test]
     fn test_inc() {
-        let (_, q) = Q.id(12345).inc("x", 12).inc("y", -13i64).inc("z", 14.5).into_bson();
+        let q = Q.id(12345).inc("x", 12).inc("y", -13i64).inc("z", 14.5).into_bson();
         assert_eq!(q, bson! {
             "_id" => 12345,
             "$inc" => {
@@ -863,7 +934,7 @@ mod tests {
 
     #[test]
     fn test_drop_all() {
-        let (_, q) = Q.field("x").between(-42, 42.5).drop_all().into_bson();
+        let q = Q.field("x").between(-42, 42.5).drop_all().into_bson();
         assert_eq!(q, bson! {
             "x" => { "$bt" => [ (-42), 42.5 ] },
             "$dropall" => true
@@ -872,7 +943,7 @@ mod tests {
 
     #[test]
     fn test_upsert() {
-        let (_, q) = Q.field("isbn").eq("0123456789")
+        let q = Q.field("isbn").eq("0123456789")
             .upsert("missing", "value")
             .upsert_many(bson! {   // overwrites
                 "isbn" => "0123456789",
@@ -892,7 +963,7 @@ mod tests {
 
     #[test]
     fn test_set() {
-        let (_, q) = Q.id(12345)
+        let q = Q.id(12345)
             .set("x", 12)
             .set_many(bson! { "a" => "x", "b" => "y" })  // overwrites
             .set("y", 34)
@@ -909,7 +980,7 @@ mod tests {
 
     #[test]
     fn test_pull() {
-        let (_, q) = Q.id(12345)
+        let q = Q.id(12345)
             .pull("xs", 12)
             .pull_all("ys", bson![34, 56.7])
             .into_bson();
@@ -926,7 +997,7 @@ mod tests {
 
     #[test]
     fn test_push() {
-        let (_, q) = Q.id(12345)
+        let q = Q.id(12345)
             .push("xs", "a")
             .push_all("ys", bson!["w", "v"])
             .into_bson();
@@ -943,7 +1014,7 @@ mod tests {
 
     #[test]
     fn test_rename() {
-        let (_, q) = Q.id("12345").rename("input", "output").rename("alpha", "omega").into_bson();
+        let q = Q.id("12345").rename("input", "output").rename("alpha", "omega").into_bson();
         assert_eq!(q, bson! {
             "_id" => "12345",
             "$rename" => {
@@ -955,7 +1026,7 @@ mod tests {
 
     #[test]
     fn test_slice() {
-        let (_, q) = Q.id(12345)
+        let q = Q.id(12345)
             .slice("array", 123)
             .slice_with_offset("array_2", 456, 789)
             .into_bson();
@@ -970,7 +1041,7 @@ mod tests {
 
     #[test]
     fn test_field_field() {
-        let (_, q) = Q.field("a").field("b").field("c").eq(12345).into_bson();
+        let q = Q.field("a").field("b").field("c").eq(12345).into_bson();
         assert_eq!(q, bson! {
             "a" => { "b" => { "c" => 12345 } }
         });
@@ -978,7 +1049,7 @@ mod tests {
 
     #[test]
     fn test_field_eq() {
-        let (_, q) = Q.field("_id").eq(ObjectId::with_timestamp(128)).into_bson();
+        let q = Q.field("_id").eq(ObjectId::with_timestamp(128)).into_bson();
         assert_eq!(q, bson! {
             "_id" => (ObjectId::with_timestamp(128))
         });
@@ -986,7 +1057,7 @@ mod tests {
 
     #[test]
     fn test_field_begin() {
-        let (_, q) = Q.field("name").begin("something").into_bson();
+        let q = Q.field("name").begin("something").into_bson();
         assert_eq!(q, bson! {
             "name" => {
                 "$begin" => "something"
@@ -996,7 +1067,7 @@ mod tests {
 
     #[test]
     fn test_field_between() {
-        let (_, q) = Q.field("x").between(0.1, 123i64).into_bson();
+        let q = Q.field("x").between(0.1, 123i64).into_bson();
         assert_eq!(q, bson! {
             "x" => {
                 "$bt" => [ 0.1, 123i64 ]
@@ -1006,7 +1077,7 @@ mod tests {
 
     #[test]
     fn test_field_gt_lt() {
-        let (_, q) = Q
+        let q = Q
             .field("x").gt(0.1)
             .field("x").lt(9.9)
             .into_bson();
@@ -1020,7 +1091,7 @@ mod tests {
 
     #[test]
     fn test_field_gte_lte() {
-        let (_, q) = Q
+        let q = Q
             .field("y").gte(1)
             .field("y").lte(99)
             .into_bson();
@@ -1034,7 +1105,7 @@ mod tests {
 
     #[test]
     fn test_field_exists() {
-        let (_, q) = Q
+        let q = Q
             .field("name").exists(true)
             .field("wat").exists(false)
             .into_bson();
@@ -1046,7 +1117,7 @@ mod tests {
 
     #[test]
     fn test_field_elem_match() {
-        let (_, q) = Q
+        let q = Q
             .field("props").elem_match(bson! { "a" => 1, "b" => "c" })
             .into_bson();
         assert_eq!(q, bson! {
@@ -1061,7 +1132,7 @@ mod tests {
 
     #[test]
     fn test_contained_in() {
-        let (_, q) = Q
+        let q = Q
             .field("x").contained_in(vec![1, 2, 3])
             .field("y").not_contained_in(vec![7, 8, 9])
             .into_bson();
@@ -1077,7 +1148,7 @@ mod tests {
 
     #[test]
     fn test_case_insensitive() {
-        let (_, q) = Q
+        let q = Q
             .field("msg").case_insensitive().eq("hello world")
             .field("err").case_insensitive().contained_in(vec!["whatever", "pfff"])
             .into_bson();
@@ -1095,7 +1166,7 @@ mod tests {
 
     #[test]
     fn test_not() {
-        let (_, q) = Q
+        let q = Q
             .field("x").not().eq(42)
             .field("y").not().between(10.0, 20.32)
             .into_bson();
@@ -1113,7 +1184,7 @@ mod tests {
 
     #[test]
     fn test_strand_stror() {
-        let (_, q) = Q
+        let q = Q
             .field("name").str_and(["me", "xyzzy", "wab"].iter().cloned())
             .field("title").str_or(["foo", "bar", "baz"].iter().cloned())
             .into_bson();
@@ -1129,13 +1200,13 @@ mod tests {
 
     #[test]
     fn test_hints_empty() {
-        let (qh, _) = Q.hints(QueryHints::new()).into_bson();
+        let qh = QH.empty().into_bson();
         assert!(qh.is_empty());
     }
 
     #[test]
     fn test_hints_max() {
-        let (qh, _) = Q.hints(QH.max(12)).into_bson();
+        let qh = QH.max(12).into_bson();
         assert_eq!(qh, bson! {
             "$max" => 12i64
         });

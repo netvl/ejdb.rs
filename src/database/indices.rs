@@ -8,6 +8,25 @@ use super::Collection;
 use Result;
 
 impl<'db> Collection<'db> {
+    /// Returns an index builder for the provided field in this collection.
+    ///
+    /// The index builder may be used to create, modify or delete various indices on
+    /// collection fields. A field may have more than one index of different types.
+    /// This may be useful if this field is heterogeneous, i.e. if it may hold different types
+    /// of data.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use ejdb::Database;
+    /// let db = Database::open("/path/to/db").unwrap();
+    /// let coll = db.collection("some_collection").unwrap();
+    ///
+    /// // create a case sensitive string index on "name" field in this collection
+    /// coll.index("name").string(true).set().unwrap();
+    /// ```
+    ///
+    /// See builder methods for more examples.
     pub fn index<S: Into<String>>(&self, key: S) -> Index {
         Index {
             coll: self,

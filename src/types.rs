@@ -9,7 +9,7 @@ use std::error;
 use bson::{self, oid};
 use itertools::Itertools;
 
-/// Default result type used in this library.
+/// The default result type used in this library.
 pub type Result<T> = result::Result<T, Error>;
 
 /// A partial save error returned by `Collection::save_all()` method.
