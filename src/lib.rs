@@ -80,13 +80,134 @@
 //! EJDB supports a pretty large subset of operations provided by MongoDB, and even has
 //! its own unique queries, like joins.
 //!
-//! Queries are perfomed with `Collection::query()` method which accepts anything which can be
-//! borrowed into a `Query`. `Query` consists of two parts: the actual query, i.e. constraints
-//! on the data in a collection, and query hints which alter the way the query is processed
-//! and returned. `Query` contains both of these parts, 
+//! Queries are perfomed with `Collection::query()` method which accepts, two arguments:
+//! anything which can be borrowed into a `Query` and anything which can be borrowed into
+//! a `QueryHints`. `Query` is the actual query, i.e. constraints on the data in a collection,
+//! and `QueryHints` alter the way the query is processed and returned.
+//!
+//! Both query and query hints are just BSON documents of [special format][ejdb-ql], therefore
+//! ejdb.rs provides the respective `From<bson::Document>`/`Into<bson::Document>` for both
+//! `Query` and `QueryHints`; however, it is recommended to use the builder API instead
+//! of constructing queries manually because this way it is much harder to create invalid queries.
+//! Naturally, invalid queries are by no means unsafe in Rust sense - if such a query is passed
+//! for execution, an error will be returned.
+//!
+//! Query builder API provides two entry points, `ejdb::query::Q` and `ejdb::query::QH`, which
+//! are kind of aliases for `Query::new()` and `QueryHints::new()` but look arguably nicer.
+//! To run a query, pass an instance of `Query` and `QueryHints` to `Collection::query()` method.
+//! The latter returns a `ejdb::PreparedQuery` instance which can be used to execute the query
+//! in various ways.
+//!
+//! ```no_run
+//! # #[macro_use] extern crate ejdb;
+//! # use ejdb::Database;
+//! use ejdb::query::{Q, QH};
+//! use ejdb::bson;
+//! use ejdb::Result;
+//! # fn main() {
+//! # let db = Database::open("/path/to/db").unwrap();
+//! # let coll = db.collection("some_collection").unwrap();
+//!
+//! let n = coll.query(Q.field("name").eq("Foo").set("count", 10), QH.empty()).update().unwrap();
+//! // `n` is the number of affected rows
+//!
+//! let names = ["foo", "bar", "baz"];
+//! let items = coll.query(Q.field("name").contained_in(names.iter().cloned()), QH.max(12))
+//!     .find().unwrap();
+//! // `items` is an iterator which contains at maximum 12 records whose `name`
+//! // field is either "foo", "bar" or "baz"
+//! let items: Result<Vec<bson::Document>> = items.collect();  // collect them into a vector
+//!
+//! let item = coll.query(Q.field("count").between(-10, 10.2), QH.field("name").include())
+//!     .find_one().unwrap();
+//! // `item` is an `Option<bson::Document>` which contains a record whose `count` field
+//! // is between -10 and 10.2, inclusive, if there is one, and this document will only contain
+//! // `name` field.
+//!
+//! let n = coll.query(Q.field("name").exists(true), QH.empty()).count().unwrap();
+//! // `n` is the number of records which contain `name` field
+//! # }
+//! ```
+//!
+//! ## Transactions
+//!
+//! You can use `Collection::begin_transaction()` method which will start a transaction over
+//! this collection. Citing the official documentation:
+//!
+//! > EJDB provides atomic and durable non parallel and read-uncommited collection level
+//! > transactions, i.e., There is only one transaction for collection is active for a single
+//! > point in a time. The data written in a transaction is visible for other non transactional
+//! > readers. EJDB transaction system utilizes write ahead logging to provide consistent
+//! > transaction rollbacks.
+//!
+//! Transactions in ejdb.rs are implemented with RAII pattern: a transaction is represented
+//! by a guard object. When this object is dropped, the transaction is committed or aborted.
+//! By default it is aborted; but you can change the default behavior with corresponding methods.
+//! Alternatively, you can explicitly commit or abort the transaction with `Transaction::commit()`
+//! or `Transaction::abort()`, respectively. Additionally, these methods return a `Result<()>`
+//! which can be used to track erros; when the transaction is closed on its drop, the result
+//! is ignored.
+//!
+//! ```no_run
+//! # use ejdb::Database;
+//! # let db = Database::open("/path/to/db").unwrap();
+//! # let coll = db.collection("some_collection").unwrap();
+//! loop {
+//!     let tx = coll.begin_transaction().unwrap();
+//!     // execute queries and other operations
+//!     // if some error happens and the loop exists prematurely, e.g. through unwinding,
+//!     // the transaction will be aborted automatically
+//!
+//!     // try to commit the transaction and try again if there is an error
+//!     if let Ok(_) = tx.commit() {
+//!         break;
+//!     }
+//! }
+//! ```
+//!
+//! ## Indices
+//!
+//! It is also possible to use `Collection::index()` method to configure indices in the collection.
+//! `index()` accepts the name of the field on which the user needs to configure indices; it
+//! returns a builder-like object which can be used to tweak indices on this field.
+//!
+//! In EJDB a field can have several associated indices of different types, which is important
+//! for heterogeneous fields. It is also possible to rebuild and optimize indices. This can
+//! be done with the respective methods on `Index` structure returned by `Collection::index()`.
+//!
+//! ```no_run
+//! # use ejdb::Database;
+//! # let db = Database::open("/path/to/db").unwrap();
+//! # let coll = db.collection("some_collection").unwrap();
+//! // create a case-sensitive string index on field `name`
+//! coll.index("name").string(true).set().unwrap();
+//!
+//! // create case-insensitive string and numeric indices on field `title`
+//! coll.index("title").number().string(false).set().unwrap();
+//!
+//! // remove number and array indices from field `items`
+//! coll.index("items").number().array().drop().unwrap();
+//!
+//! // optimize string index on field `name`
+//! coll.index("name").string(true).optimize().unwrap();
+//!
+//! // drop all indices on field `properties`
+//! coll.index("properties").drop_all();
+//! ```
+//!
+//! All consuming methods except for `Index::drop_all()` will panic if index type is not
+//! specified before their invocation:
+//!
+//! ```no_run
+//! # use ejdb::Database;
+//! # let db = Database::open("/path/to/db").unwrap();
+//! # let coll = db.collection("some_collection").unwrap();
+//! coll.index("name").set();  // will panic
+//! ```
 //!
 //!   [EJDB]: http://ejdb.org/
 //!   [bson-rs]: https://crates.io/crates/bson
+//!   [ejdb-ql]: http://ejdb.org/doc/ql/ql.html
 
 #[macro_use]
 extern crate bitflags;
