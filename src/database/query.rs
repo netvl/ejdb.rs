@@ -103,7 +103,7 @@ pub struct QueryHintsOrderBy(QueryHints, String);
 
 impl QueryHintsOrderBy {
     fn add_hint(mut self, value: i32) -> QueryHints {
-        self.0.add_hint("$orderBy", self.1, value);
+        self.0.add_hint("$orderby", self.1, value);
         self.0
     }
 
@@ -1209,6 +1209,36 @@ mod tests {
         let qh = QH.max(12).into_bson();
         assert_eq!(qh, bson! {
             "$max" => 12i64
+        });
+    }
+
+    #[test]
+    fn test_hints_skip() {
+        let qh = QH.skip(12).into_bson();
+        assert_eq!(qh, bson! {
+            "$skip" => 12i64
+        });
+    }
+
+    #[test]
+    fn test_hints_include_exclude() {
+        let qh = QH.field("a").include().field("b").exclude().into_bson();
+        assert_eq!(qh, bson! {
+            "$fields" => {
+                "a" => 1,
+                "b" => (-1)
+            }
+        });
+    }
+
+    #[test]
+    fn test_hints_asc_desc() {
+        let qh = QH.order_by("a").asc().order_by("b").desc().into_bson();
+        assert_eq!(qh, bson! {
+            "$orderby" => {
+                "a" => 1,
+                "b" => (-1)
+            }
         });
     }
 }

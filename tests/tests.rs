@@ -6,6 +6,7 @@ extern crate bson;
 use tempdir::TempDir;
 
 use ejdb::{Database, CollectionOptions};
+use ejdb::query::{Q, QH};
 use ejdb::meta::IndexType;
 
 #[test]
@@ -108,6 +109,57 @@ fn test_save_load() {
             "key" => "a",
             "xyz" => 632
         }
+    });
+}
+
+#[test]
+fn test_query() {
+    let (db, _dir) = make_db();
+
+    let coll = db.collection("test").unwrap();
+
+    let ids = coll.save_all(vec![
+        bson!{ "name" => "Foo", "count" => 123 },
+        bson!{ "name" => "Foo Foo", "count" => 345 },
+        bson!{ "name" => "Foo Bar", "count" => 23 },
+        bson!{ "name" => "Bar", "items" => [1, "hello", 42.3] },
+        bson!{ "title" => "Baz", "subobj" => { "key" => "a", "xyz" => 632 } }
+    ]).unwrap();
+
+    let n_foo = coll.query(Q.field("name").eq(("Foo".to_owned(), "".to_owned())), QH.empty())
+        .count().unwrap();
+    assert_eq!(n_foo, 3);
+
+    let n_bar = coll.query(Q.field("name").eq(("Bar".to_owned(), "".to_owned())), QH.empty())
+        .count().unwrap();
+    assert_eq!(n_bar, 2);
+
+    let foos = coll.query(Q.field("count").gt(100), QH.order_by("count").desc()).find().unwrap();
+    let foos_vec: ejdb::Result<Vec<_>> = foos.collect();
+    assert_eq!(foos_vec.unwrap(), vec![
+        bson! { "_id" => (ids[1].clone()), "name" => "Foo Foo", "count" => 345 },
+        bson! { "_id" => (ids[0].clone()), "name" => "Foo", "count" => 123 }
+    ]);
+
+    let baz = coll.query(Q.field("subobj.xyz").eq(632), QH.empty()).find_one().unwrap();
+    assert!(baz.is_some());
+    assert_eq!(baz.unwrap(), bson! {
+        "_id" => (ids[4].clone()),
+        "title" => "Baz",
+        "subobj" => {
+            "key" => "a",
+            "xyz" => 632
+        }
+    });
+
+    let result = coll.query(Q.field("items").exists(true).push_all("items", vec![1, 2, 3]), QH.empty())
+        .update().unwrap();
+    assert_eq!(result, 1);
+    let bar = coll.load(&ids[3]).unwrap().unwrap();
+    assert_eq!(bar, bson! {
+        "_id" => (ids[3].clone()),
+        "name" => "Bar",
+        "items" => [1, "hello", 42.3, 1, 2, 3]
     });
 }
 
