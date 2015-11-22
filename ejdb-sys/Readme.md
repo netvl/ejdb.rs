@@ -1,4 +1,4 @@
-# Low-level generated bindings to libejdb
+# Native bindings for libejdb
 
 This crate provides low-level bindings to libejdb. It is used as a basis for ejdb.rs, high-level
 bindings for EJDB.
