@@ -35,3 +35,7 @@ ejdb = "0.1"
 ### Version 0.1.0
 
 * Initial release
+
+## License
+
+This library is provided under MIT license.
