@@ -1,0 +1,3 @@
+#!/bin/bash
+
+exec sudo docker run -it --rm -v $PWD/db:/db netvl/ejdb
