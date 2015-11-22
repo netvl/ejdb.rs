@@ -3,8 +3,6 @@ notifications:
     recipients:
       - dpx.infinity@gmail.com
 
-# temp
-
 language: rust
 sudo: false
 
