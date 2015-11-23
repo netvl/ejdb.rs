@@ -6,14 +6,6 @@ notifications:
 language: rust
 sudo: false
 
-addons:
-  apt:
-    packages:
-      - cmake
-      - zlib1g-dev
-      - git
-      - pkg-config
-
 rust:
   - nightly
   - beta
@@ -21,11 +13,14 @@ rust:
 
 before_script:
   - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+  # default travis packages are sufficient to build libejdb
   - |
-      git clone https://github.com/Softmotions/ejdb.git &&
-      cd ejdb && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$HOME/prefix ../ &&
-      make && make install &&
-      export PKG_CONFIG_PATH=$HOME/prefix/lib/x86_64-linux-gnu/pkgconfig
+      git clone https://github.com/Softmotions/ejdb.git && pushd ejdb && 
+      mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$HOME/prefix ../ &&
+      make && make install && 
+      export PKG_CONFIG_PATH="$HOME/prefix/lib/pkgconfig" && 
+      export LD_LIBRARY_PATH="$HOME/prefix/lib:$LD_LIBRARY_PATH" && 
+      popd
 
 script:
   - |
