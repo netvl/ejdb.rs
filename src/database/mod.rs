@@ -100,6 +100,9 @@ pub mod open_mode {
 /// collections.
 pub struct Database(*mut ejdb_sys::EJDB);
 
+// Database is not tied to a thread, so it is sendable.
+unsafe impl Send for Database {}
+
 impl Drop for Database {
     fn drop(&mut self) {
         unsafe {
