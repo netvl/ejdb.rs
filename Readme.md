@@ -36,9 +36,13 @@ the respective package using your system's native package manager.
 
 ## Changelog
 
+### Version 0.1.1
+
+* Made `Database` implement `Send`.
+
 ### Version 0.1.0
 
-* Initial release
+* Initial release.
 
 ## License
 
