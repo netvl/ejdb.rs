@@ -36,6 +36,10 @@ the respective package using your system's native package manager.
 
 ## Changelog
 
+### Version 0.1.2
+
+* Improved `bson!` macro to support optional values.
+
 ### Version 0.1.1
 
 * Made `Database` implement `Send`.

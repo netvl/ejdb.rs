@@ -59,6 +59,30 @@
 /// assert_eq!(bson!(true), Bson::Boolean(true));
 /// # }
 /// ```
+///
+/// You can also tell the macro to insert some optional value only if it is present with
+/// a special bit of syntax:
+///
+/// ```
+/// #[macro_use] extern crate ejdb;
+/// use ejdb::bson::{Bson, Document};
+///
+/// # fn main() {
+/// let mut d1 = Document::new();
+/// d1.insert("non-empty", 123i32);
+///
+/// let some_value = Some(123i32);
+/// assert_eq!(d1, bson! {
+///     "empty" => (opt None::<String>),
+///     "non-empty" => (opt some_value)
+/// });
+/// # }
+/// ```
+///
+/// This is convenient when you're building a document with optional fields. Naturally,
+/// the thing which follows `opt` in `(opt ...)` must be an expression, not some nested
+/// syntax like `{ a => b, ... }` or `[ a, b, ... ]`.
+
 #[macro_export]
 macro_rules! bson {
     { [ $($e:tt),* ] } => {{
@@ -66,10 +90,20 @@ macro_rules! bson {
         $(v.push($crate::bson::Bson::from(bson!($e)));)*
         v
     }};
+    { @collect $tgt:ident, } => { $tgt };
+    { @collect $tgt:ident, $k:expr => (opt $v:expr), $($rest:tt)* } => {{
+        if let Some(v) = $v {
+            $tgt.insert($k, $crate::bson::Bson::from(v));
+        }
+        bson! { @collect $tgt, $($rest)* } 
+    }};
+    { @collect $tgt:ident, $k:expr => $v:tt, $($rest:tt)* } => {{
+        $tgt.insert($k, bson!($v));
+        bson! { @collect $tgt, $($rest)* }
+    }};
     { { $($k:expr => $v:tt),* } } => {{
         let mut d = $crate::bson::Document::new();
-        $(d.insert($k, bson!($v));)*
-        d
+        bson! { @collect d, $($k => $v,)* }
     }};
     { $($k:expr => $v:tt),* } => { bson!{{ $($k => $v),* }} };
     { $e:expr } => { $crate::bson::Bson::from($e) };
