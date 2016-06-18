@@ -43,7 +43,7 @@ pub mod open_mode {
         /// ```
         ///
         /// This default set of flags is used by `Database::open()` static method.
-        flags DatabaseOpenMode: u32 {
+        pub flags DatabaseOpenMode: u32 {
             /// Open the database in read-only mode.
             const READ                    = ejdb_sys::JBOREADER,
             /// Open the database in write-only mode.

@@ -215,7 +215,7 @@ extern crate bitflags;
 extern crate quick_error;
 extern crate bson as bson_crate;
 extern crate itertools;
-extern crate ejdb_sys;
+pub extern crate ejdb_sys;
 extern crate libc;
 
 /// A reexport of `bson` crate used by this crate in public interface.

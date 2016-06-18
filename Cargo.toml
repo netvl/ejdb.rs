@@ -1,6 +1,6 @@
 [package]
 name = "ejdb"
-version = "0.1.2"
+version = "0.2.0"
 authors = ["Vladimir Matveev <vladimir.matweev@gmail.com>"]
 description = "Bindings for EJDB, and embedded JSON database"
 repository = "https://github.com/netvl/ejdb.rs"
@@ -13,11 +13,11 @@ license = "MIT"
 name = "ejdb"
 
 [dependencies]
-ejdb-sys = { path = "ejdb-sys", version = "0.1" }
-bson = "0.1"
-bitflags = "0.3"
-quick-error = "0.1"
-libc = "0.1"
+ejdb-sys = { path = "ejdb-sys", version = "0.2" }
+bson = "0.2"
+bitflags = "0.7"
+quick-error = "1.1"
+libc = "0.2"
 itertools = "0.4"
 
 [dev-dependencies]
