@@ -213,7 +213,7 @@
 extern crate bitflags;
 #[macro_use]
 extern crate quick_error;
-extern crate bson as bson_crate;
+pub extern crate bson as bson_crate;
 extern crate itertools;
 pub extern crate ejdb_sys;
 extern crate libc;
