@@ -1,6 +1,6 @@
 [package]
 name = "ejdb"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Vladimir Matveev <vladimir.matweev@gmail.com>"]
 description = "Bindings for EJDB, and embedded JSON database"
 repository = "https://github.com/netvl/ejdb.rs"
