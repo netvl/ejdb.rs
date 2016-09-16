@@ -14,7 +14,7 @@ name = "ejdb"
 
 [dependencies]
 ejdb-sys = { path = "ejdb-sys", version = "0.2" }
-bson = "0.2"
+bson = "0.3"
 bitflags = "0.7"
 quick-error = "1.1"
 libc = "0.2"
