@@ -7,7 +7,7 @@ impl<'db> Collection<'db> {
     /// Starts a transaction, returning a guard object for it.
     ///
     /// This method can be used to start transactions over an EJDB collection. Transactions
-    /// are controlled with their guard objects, which rely on RAII pattern to abort or
+    /// are controlled with their guard objects, which rely on the RAII pattern to abort or
     /// commit transactions when appropriate.
     ///
     /// # Failures
@@ -54,8 +54,8 @@ impl<'db> Collection<'db> {
 
 /// Represents an active transaction.
 ///
-/// This structure is a transaction guard for an EJDB collection. It employs RAII pattern:
-/// a value of this structure is returned when transaction is started and when this value
+/// This structure is a transaction guard for an EJDB collection. It employs the RAII pattern:
+/// a value of this structure is returned when a transaction is started and when this value
 /// is dropped, the transaction is committed or aborted.
 ///
 /// By default when a transaction goes out of scope, it is aborted. This is done because
@@ -67,8 +67,8 @@ impl<'db> Collection<'db> {
 /// However, it is possible to change the default behavior with `set_commit()/set_abort()` methods,
 /// and it is also possible to commit or abort the transaction with `commit()`/`abort()` methods.
 /// `finish()` method is essentially equivalent to dropping the transaction guard, except that
-/// it returns a value which may contain an error (for regular drops any errors are ignord).
-/// `will_commit()`/`will_abort()` methods will `true` if their respective action will be taken
+/// it returns a value which may contain an error (for regular drops any errors are ignored).
+/// `will_commit()`/`will_abort()` methods return `true` if their respective action will be taken
 /// upon finishing.
 ///
 /// In EJDB transactions can only span one collection, therefore transactions created from a
@@ -110,11 +110,11 @@ impl<'coll, 'db> Transaction<'coll, 'db> {
     #[inline]
     pub fn will_abort(&self) -> bool { !self.commit }
 
-    /// Makes this transaction to commit when dropped.
+    /// Makes this transaction commit when dropped.
     #[inline]
     pub fn set_commit(&mut self) { self.commit = true; }
 
-    /// Makes this transaction to abort when dropped.
+    /// Makes this transaction abort when dropped.
     #[inline]
     pub fn set_abort(&mut self) { self.commit = false; }
 

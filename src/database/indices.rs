@@ -50,7 +50,7 @@ impl<'db> Collection<'db> {
 /// indices are specified for some field in collection records, so this structure is used to
 /// configure indices for one specific field.
 ///
-/// Index manipulation is done with this structure which provides builder-like interface
+/// Index manipulation is done with this structure which provides a builder-like interface
 /// to create, change properties or drop an index on one field. Since an index can't exist
 /// separately from a collection, this structure is linked via a lifetime to its corresponding
 /// collection object. An instance of this structure is obtained with `Collection::index()` method.
