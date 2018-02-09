@@ -80,7 +80,7 @@
 //! EJDB supports a pretty large subset of operations provided by MongoDB, and even has
 //! its own unique queries, like joins.
 //!
-//! Queries are perfomed with `Collection::query()` method which accepts, two arguments:
+//! Queries are performed with `Collection::query()` method which accepts, two arguments:
 //! anything which can be borrowed into a `Query` and anything which can be borrowed into
 //! a `QueryHints`. `Query` is the actual query, i.e. constraints on the data in a collection,
 //! and `QueryHints` alter the way the query is processed and returned.
@@ -134,7 +134,7 @@
 //! You can use `Collection::begin_transaction()` method which will start a transaction over
 //! this collection. Citing the official documentation:
 //!
-//! > EJDB provides atomic and durable non parallel and read-uncommited collection level
+//! > EJDB provides atomic and durable non parallel and read-uncommitted collection level
 //! > transactions, i.e., There is only one transaction for collection is active for a single
 //! > point in a time. The data written in a transaction is visible for other non transactional
 //! > readers. EJDB transaction system utilizes write ahead logging to provide consistent
@@ -145,7 +145,7 @@
 //! By default it is aborted; but you can change the default behavior with corresponding methods.
 //! Alternatively, you can explicitly commit or abort the transaction with `Transaction::commit()`
 //! or `Transaction::abort()`, respectively. Additionally, these methods return a `Result<()>`
-//! which can be used to track erros; when the transaction is closed on its drop, the result
+//! which can be used to track errors; when the transaction is closed on its drop, the result
 //! is ignored.
 //!
 //! ```no_run
@@ -155,7 +155,7 @@
 //! loop {
 //!     let tx = coll.begin_transaction().unwrap();
 //!     // execute queries and other operations
-//!     // if some error happens and the loop exists prematurely, e.g. through unwinding,
+//!     // if some error happens and the loop exits prematurely, e.g. through unwinding,
 //!     // the transaction will be aborted automatically
 //!
 //!     // try to commit the transaction and try again if there is an error

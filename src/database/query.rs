@@ -13,7 +13,7 @@ use utils::bson::BsonNumber;
 /// execution in EJDB. It implements `Deref<Target=bson::Document>` and `DerefMut`, therefore
 /// it is possible to work with it as a BSON document directly. It also has
 /// `into_bson()`/`as_bson()` methods and `Into<bson::Document>`/`From<bson::Document>`
-/// implemenations. If an invalid document is constructed and passed as a hints map when
+/// implementations. If an invalid document is constructed and passed as a hints map when
 /// executing a query, an error will be returned.
 ///
 /// Query hints are a part of any query operation and are passed with the actual query to
@@ -98,7 +98,7 @@ impl QueryHints {
     }
 }
 
-/// A builder for ordering hint by a specific field.
+/// A builder for the hint to order by a specific field.
 pub struct QueryHintsOrderBy(QueryHints, String);
 
 impl QueryHintsOrderBy {
@@ -215,11 +215,11 @@ impl QH {
 
 /// An EJDB query.
 ///
-/// This structure represents both a find query and an update query, because both kind of
+/// This structure represents both a find query and an update query, because both kinds of
 /// queries are executed in the same way.
 ///
 /// A query internally is a BSON document of a [certain format][queries], very similar to
-/// MongoDB queries. This structure provides convenience methods to build such document.
+/// MongoDB queries. This structure provides convenience methods to build such a document.
 /// Additionally, a query may have hints, i.e. non-data parameters affecting its behavior.
 /// These parameters are encapsulated in the `QueryHints` structure and are passed to the
 /// `Collection::query()` method separately.
@@ -532,7 +532,7 @@ enum FieldConstraintData {
 
 /// A transient builder for adding field-based query constraints.
 ///
-/// Instances of this structure are returned by `Query::field()` and `FieldConstrait::field()`
+/// Instances of this structure are returned by `Query::field()` and `FieldConstraint::field()`
 /// methods.
 pub struct FieldConstraint(Cow<'static, str>, FieldConstraintData);
 
@@ -613,7 +613,7 @@ impl FieldConstraint {
 
     /// Adds an `$exists` constraint for this field.
     ///
-    /// The field must exists if `exists` is `true`, the opposite otherwise.
+    /// The field must exist if `exists` is `true`, the opposite otherwise.
     pub fn exists(self, exists: bool) -> Query {
         self.process(bson!("$exists" => exists))
     }
@@ -637,7 +637,7 @@ impl FieldConstraint {
 
     /// Adds an `$nin` constraint for this field.
     ///
-    /// The value of this field must not be equal to all of the values yielded by `values`.
+    /// The value of this field must not be equal to any of the values yielded by `values`.
     pub fn not_contained_in<I>(self, values: I) -> Query
         where I: IntoIterator, I::Item: Into<Bson>
     {

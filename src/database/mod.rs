@@ -409,7 +409,7 @@ impl Default for CollectionOptions {
 /// following operations:
 ///
 /// * Executing queries.
-/// * Creating transacions.
+/// * Creating transactions.
 /// * Saving and loading objects by their identifier.
 ///
 /// Dropping and creating collections is performed through `Database` object.
@@ -467,7 +467,7 @@ impl<'db> Collection<'db> {
     /// # Failures
     ///
     /// Returns an error if the provided document can't be converted to the EJDB one or
-    /// if some error occurs which prevents the corresponding EJDB operation from successfull
+    /// if some error occurs which prevents the corresponding EJDB operation from successful
     /// completion.
     ///
     /// # Example
@@ -668,7 +668,7 @@ impl<'coll, 'db, 'out, Q, H> PreparedQuery<'coll, 'db, 'out, Q, H>
         }
     }
 
-    /// Executes the query, returning the affected number of records.
+    /// Executes the query, returning the number of affected records.
     ///
     /// This method is equivalent to `find().map(|r| r.len())` but more efficient because
     /// it does not load the actual data from the database.
