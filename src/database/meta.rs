@@ -260,5 +260,5 @@ impl FromStr for IndexType {
 fn test_metadata() {
     let db = Database::open("db/test").unwrap();
     let meta = db.get_metadata().unwrap();
-    println!("{}", Bson::Document(meta.into_inner()).to_json());
+    println!("{}", Bson::Document(meta.into_inner()));
 }

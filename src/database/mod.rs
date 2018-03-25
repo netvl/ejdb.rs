@@ -38,7 +38,7 @@ pub mod open_mode {
         /// # use ejdb::{DatabaseOpenMode, open_mode};
         /// assert_eq!(
         ///     DatabaseOpenMode::default(),
-        ///     open_mode::READ | open_mode::WRITE | open_mode::CREATE
+        ///     DatabaseOpenMode::READ | DatabaseOpenMode::WRITE | DatabaseOpenMode::CREATE
         /// );
         /// ```
         ///
@@ -77,10 +77,10 @@ pub mod open_mode {
         ///
         /// ```no_run
         /// # use ejdb::{Database, DatabaseOpenMode, open_mode};
-        /// let db = (DatabaseOpenMode::default() | open_mode::TRUNCATE).open("path/to/db");
+        /// let db = (DatabaseOpenMode::default() | DatabaseOpenMode::TRUNCATE).open("path/to/db");
         /// // equivalent to
         /// let db = Database::open_with_mode(
-        ///     "path/to/db", DatabaseOpenMode::default() | open_mode::TRUNCATE
+        ///     "path/to/db", DatabaseOpenMode::default() | DatabaseOpenMode::TRUNCATE
         /// );
         /// ```
         #[inline]
@@ -586,22 +586,16 @@ impl<'db> Collection<'db> {
     ///
     /// Using the query API:
     /// ```no_run
+    /// # #[macro_use] extern crate ejdb;
     /// # use ejdb::Database;
     /// use ejdb::query::{Q, QH};
     ///
+    /// # fn main() {
     /// let db = Database::open("/path/to/db").unwrap();
     /// let coll = db.collection("some_collection").unwrap();
-    /// let query = coll.query(Q.field("name", QH.empty()).eq("Foo"));
+    /// let query = coll.query(Q.field("name").eq("Foo"), QH.empty());
     /// // work with the query object
-    /// ```
-    ///
-    /// Providing raw BSON document directly:
-    /// ```no_run
-    /// # use ejdb::Database;
-    /// let db = Database::open("/path/to/db").unwrap();
-    /// let coll = db.collection("some_collection").unwrap();
-    /// let query = coll.query(bson! { "name" => "Foo" }.into());
-    /// // work with the query object
+    /// # }
     /// ```
     #[inline]
     pub fn query<Q, H>(&self, query: Q, hints: H) -> PreparedQuery<Q, H>
