@@ -43,28 +43,28 @@ pub mod open_mode {
         /// ```
         ///
         /// This default set of flags is used by `Database::open()` static method.
-        pub flags DatabaseOpenMode: u32 {
+        pub struct DatabaseOpenMode: u32 {
             /// Open the database in read-only mode.
-            const READ                    = ejdb_sys::JBOREADER,
+            const READ                    = ejdb_sys::JBOREADER;
             /// Open the database in write-only mode.
-            const WRITE                   = ejdb_sys::JBOWRITER,
+            const WRITE                   = ejdb_sys::JBOWRITER;
             /// Create the database file if it does not exist.
-            const CREATE                  = ejdb_sys::JBOCREAT,
+            const CREATE                  = ejdb_sys::JBOCREAT;
             /// Truncate the database after opening it.
-            const TRUNCATE                = ejdb_sys::JBOTRUNC,
+            const TRUNCATE                = ejdb_sys::JBOTRUNC;
             /// Open the database without locking.
-            const NO_LOCK                 = ejdb_sys::JBONOLCK,
+            const NO_LOCK                 = ejdb_sys::JBONOLCK;
             /// Lock the database without blocking.
-            const LOCK_WITHOUT_BLOCKING   = ejdb_sys::JBOLCKNB,
+            const LOCK_WITHOUT_BLOCKING   = ejdb_sys::JBOLCKNB;
             /// Synchronize every transaction.
-            const SYNC                    = ejdb_sys::JBOTSYNC,
+            const SYNC                    = ejdb_sys::JBOTSYNC;
         }
     }
 
     impl Default for DatabaseOpenMode {
         #[inline]
         fn default() -> DatabaseOpenMode {
-            READ | WRITE | CREATE
+            DatabaseOpenMode::READ | DatabaseOpenMode::WRITE | DatabaseOpenMode::CREATE
         }
     }
 

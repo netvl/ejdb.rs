@@ -99,7 +99,8 @@ pub type Collections<'a> = iter::Map<
 fn parse_collection_metadata(bson: &Bson) -> CollectionMetadata {
     match *bson {
         Bson::Document(ref doc) => CollectionMetadata(doc),
-        ref something_else => panic!("invalid collections metadata: {}", something_else.to_json())
+        ref something_else => {
+            panic!("invalid collections metadata: {}", something_else)}
     }
 }
 
@@ -175,7 +176,7 @@ pub type CollectionIndices<'a> = iter::Map<
 fn parse_index_metadata(bson: &Bson) -> IndexMetadata {
     match *bson {
         Bson::Document(ref doc) => IndexMetadata(doc),
-        ref something_else => panic!("invalid index metadata: {}", something_else.to_json())
+        ref something_else => panic!("invalid index metadata: {}", something_else)
     }
 }
 
