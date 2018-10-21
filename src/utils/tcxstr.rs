@@ -1,5 +1,5 @@
-use std::slice;
 use std::ops::{Deref, DerefMut};
+use std::slice;
 
 use ejdb_sys;
 

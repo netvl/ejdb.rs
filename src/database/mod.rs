@@ -1,25 +1,25 @@
+use std::borrow::Borrow;
 use std::ffi::{CStr, CString};
-use std::str;
-use std::slice;
+use std::fmt;
 use std::io;
 use std::ptr;
-use std::borrow::Borrow;
-use std::fmt;
+use std::slice;
+use std::str;
 
-use libc::{c_int, c_char};
+use libc::{c_char, c_int};
 
-use ejdb_sys;
 use bson::{self, oid};
+use ejdb_sys;
 
 use self::open_mode::DatabaseOpenMode;
-use utils::tcxstr::TCXString;
 use ejdb_bson::{EjdbBsonDocument, EjdbObjectId};
 use types::PartialSave;
+use utils::tcxstr::TCXString;
 use {Error, Result};
 
 pub mod indices;
-pub mod query;
 pub mod meta;
+pub mod query;
 pub mod tx;
 
 /// Database open mode constants.
@@ -150,19 +150,25 @@ impl Database {
     /// let db = Database::open_with_mode("/path/to/db", DatabaseOpenMode::default()).unwrap();
     /// // work with the database
     /// ```
-    pub fn open_with_mode<P: Into<Vec<u8>>>(path: P, open_mode: DatabaseOpenMode) -> Result<Database> {
+    pub fn open_with_mode<P: Into<Vec<u8>>>(
+        path: P,
+        open_mode: DatabaseOpenMode,
+    ) -> Result<Database> {
         let ejdb = unsafe { ejdb_sys::ejdbnew() };
         if ejdb.is_null() {
-            return Err("cannot create database".into())
+            return Err("cannot create database".into());
         }
 
         let p = try!(CString::new(path).map_err(|_| "invalid path specified"));
-        unsafe {
-            if ejdb_sys::ejdbopen(ejdb, p.as_ptr(), open_mode.bits() as c_int) == 0 {
-                return Err(format!("cannot open database: {}", error_code_msg(last_error_code(ejdb))).into());
-            }
+
+        if unsafe { ejdb_sys::ejdbopen(ejdb, p.as_ptr(), open_mode.bits() as c_int) } {
+            Ok(Database(ejdb))
+        } else {
+            Err(format!(
+                "cannot open database: {}",
+                error_code_msg(last_error_code(ejdb))
+            ).into())
         }
-        Ok(Database(ejdb))
     }
 
     /// A shortcut for `Database::open_with_mode(path, DatabaseOpenMode::default())`.
@@ -184,12 +190,16 @@ impl Database {
     fn last_error_msg(&self) -> Option<&'static str> {
         match last_error_code(self.0) {
             0 => None,
-            n => Some(error_code_msg(n))
+            n => Some(error_code_msg(n)),
         }
     }
 
     fn last_error<T>(&self, msg: &'static str) -> Result<T> {
-        Err(format!("{}: {}", msg, self.last_error_msg().unwrap_or("unknown error")).into())
+        Err(format!(
+            "{}: {}",
+            msg,
+            self.last_error_msg().unwrap_or("unknown error")
+        ).into())
     }
 
     /// Returns the given collection by its name, if it exists.
@@ -222,10 +232,13 @@ impl Database {
         if coll.is_null() {
             match self.last_error_msg() {
                 None => Ok(None),
-                Some(msg) => Err(msg.into())
+                Some(msg) => Err(msg.into()),
             }
         } else {
-            Ok(Some(Collection { coll: coll, db: self }))
+            Ok(Some(Collection {
+                coll: coll,
+                db: self,
+            }))
         }
     }
 
@@ -251,19 +264,26 @@ impl Database {
     /// let coll = db.collection_with_options("some_collection", CollectionOptions::default()).unwrap();
     /// // work with the collection
     /// ```
-    pub fn collection_with_options<S: Into<Vec<u8>>>(&self, name: S, options: CollectionOptions) -> Result<Collection> {
+    pub fn collection_with_options<S: Into<Vec<u8>>>(
+        &self,
+        name: S,
+        options: CollectionOptions,
+    ) -> Result<Collection> {
         let p = try!(CString::new(name).map_err(|_| "invalid collection name"));
         let mut ejcollopts = ejdb_sys::EJCOLLOPTS {
-            large: options.large as u8,
-            compressed: options.compressed as u8,
+            large: options.large,
+            compressed: options.compressed,
             records: options.records,
-            cachedrecords: options.cached_records as c_int
+            cachedrecords: options.cached_records as c_int,
         };
         let coll = unsafe { ejdb_sys::ejdbcreatecoll(self.0, p.as_ptr(), &mut ejcollopts) };
         if coll.is_null() {
             self.last_error("cannot create or open a collection")
         } else {
-            Ok(Collection { coll: coll, db: self })
+            Ok(Collection {
+                coll: coll,
+                db: self,
+            })
         }
     }
 
@@ -305,7 +325,7 @@ impl Database {
     /// ```
     pub fn drop_collection<S: Into<Vec<u8>>>(&self, name: S, prune: bool) -> Result<()> {
         let p = try!(CString::new(name).map_err(|_| "invalid collection name"));
-        if unsafe { ejdb_sys::ejdbrmcoll(self.0, p.as_ptr(), prune as u8) } != 0 {
+        if unsafe { ejdb_sys::ejdbrmcoll(self.0, p.as_ptr(), prune) } {
             Ok(())
         } else {
             self.last_error("cannot remove a collection")
@@ -340,7 +360,7 @@ pub struct CollectionOptions {
     /// Expected number of records in the collection. Default is 128 000.
     pub records: i64,
     /// Maximum number of records cached in memory. Default is 0.
-    pub cached_records: i32
+    pub cached_records: i32,
 }
 
 impl CollectionOptions {
@@ -395,7 +415,7 @@ impl Default for CollectionOptions {
             large: false,
             compressed: false,
             records: 128_000,
-            cached_records: 0
+            cached_records: 0,
         }
     }
 }
@@ -419,7 +439,7 @@ impl Default for CollectionOptions {
 /// `CollectionOptions::get_or_create()` methods.
 pub struct Collection<'db> {
     coll: *mut ejdb_sys::EJCOLL,
-    db: &'db Database
+    db: &'db Database,
 }
 
 impl<'db> Collection<'db> {
@@ -438,12 +458,15 @@ impl<'db> Collection<'db> {
             #[repr(C)]
             struct EjcollInternal {
                 cname: *const c_char,
-                cnamesz: c_int
+                cnamesz: c_int,
             }
 
             let coll_internal = coll as *const _ as *const EjcollInternal;
             unsafe {
-                ((*coll_internal).cname as *const u8, (*coll_internal).cnamesz as usize)
+                (
+                    (*coll_internal).cname as *const u8,
+                    (*coll_internal).cnamesz as usize,
+                )
             }
         }
 
@@ -488,7 +511,8 @@ impl<'db> Collection<'db> {
         let mut ejdb_doc = try!(EjdbBsonDocument::from_bson(doc.borrow()));
         let mut out_id = EjdbObjectId::empty();
 
-        if unsafe { ejdb_sys::ejdbsavebson(self.coll, ejdb_doc.as_raw_mut(), out_id.as_raw_mut()) != 0 } {
+        if unsafe { ejdb_sys::ejdbsavebson(self.coll, ejdb_doc.as_raw_mut(), out_id.as_raw_mut()) }
+        {
             Ok(out_id.into())
         } else {
             self.db.last_error("error saving BSON document")
@@ -520,11 +544,17 @@ impl<'db> Collection<'db> {
         let ejdb_oid: EjdbObjectId = id.clone().into();
         let result = unsafe { ejdb_sys::ejdbloadbson(self.coll, ejdb_oid.as_raw()) };
         if result.is_null() {
-            if self.db.last_error_msg().is_none() { Ok(None) }
-            else { self.db.last_error("error loading BSON document") }
+            if self.db.last_error_msg().is_none() {
+                Ok(None)
+            } else {
+                self.db.last_error("error loading BSON document")
+            }
         } else {
             unsafe {
-                EjdbBsonDocument::from_ptr(result).to_bson().map(Some).map_err(|e| e.into())
+                EjdbBsonDocument::from_ptr(result)
+                    .to_bson()
+                    .map(Some)
+                    .map_err(|e| e.into())
             }
         }
     }
@@ -559,16 +589,20 @@ impl<'db> Collection<'db> {
     /// # }
     /// ```
     pub fn save_all<I>(&self, docs: I) -> Result<Vec<oid::ObjectId>>
-            where I: IntoIterator,
-                  I::Item: Borrow<bson::Document> {
+    where
+        I: IntoIterator,
+        I::Item: Borrow<bson::Document>,
+    {
         let mut result = Vec::new();
         for doc in docs {
             match self.save(doc.borrow()) {
                 Ok(id) => result.push(id),
-                Err(e) => return Err(Error::PartialSave(PartialSave {
-                    cause: Box::new(e),
-                    successful_ids: result
-                }))
+                Err(e) => {
+                    return Err(Error::PartialSave(PartialSave {
+                        cause: Box::new(e),
+                        successful_ids: result,
+                    }))
+                }
             }
         }
         Ok(result)
@@ -599,13 +633,15 @@ impl<'db> Collection<'db> {
     /// ```
     #[inline]
     pub fn query<Q, H>(&self, query: Q, hints: H) -> PreparedQuery<Q, H>
-        where Q: Borrow<query::Query>, H: Borrow<query::QueryHints>
+    where
+        Q: Borrow<query::Query>,
+        H: Borrow<query::QueryHints>,
     {
         PreparedQuery {
             coll: self,
             query: query,
             hints: hints,
-            log_out: None
+            log_out: None,
         }
     }
 }
@@ -621,11 +657,13 @@ pub struct PreparedQuery<'coll, 'db: 'coll, 'out, Q, H> {
     coll: &'coll Collection<'db>,
     query: Q,
     hints: H,
-    log_out: Option<&'out mut io::Write>
+    log_out: Option<&'out mut io::Write>,
 }
 
 impl<'coll, 'db, 'out, Q, H> PreparedQuery<'coll, 'db, 'out, Q, H>
-    where Q: Borrow<query::Query>, H: Borrow<query::QueryHints>
+where
+    Q: Borrow<query::Query>,
+    H: Borrow<query::QueryHints>,
 {
     /// Sets the provided writer as a logging target for this query.
     ///
@@ -653,12 +691,15 @@ impl<'coll, 'db, 'out, Q, H> PreparedQuery<'coll, 'db, 'out, Q, H>
     /// // the query now will log to `log_data` vector when executed
     /// # }
     /// ```
-    pub fn log_output<'o>(self, target: &'o mut (io::Write + 'o)) -> PreparedQuery<'coll, 'db, 'o, Q, H> {
+    pub fn log_output<'o>(
+        self,
+        target: &'o mut (io::Write + 'o),
+    ) -> PreparedQuery<'coll, 'db, 'o, Q, H> {
         PreparedQuery {
             coll: self.coll,
             query: self.query,
             hints: self.hints,
-            log_out: Some(target)
+            log_out: Some(target),
         }
     }
 
@@ -752,10 +793,13 @@ impl<'coll, 'db, 'out, Q, H> PreparedQuery<'coll, 'db, 'out, Q, H>
     /// ```
     pub fn find_one(self) -> Result<Option<bson::Document>> {
         self.execute(ejdb_sys::JBQRYFINDONE)
-            .map(|(r, n)| QueryResult { result: r, current: 0, total: n })
-            .and_then(|qr| match qr.into_iter().next() {
+            .map(|(r, n)| QueryResult {
+                result: r,
+                current: 0,
+                total: n,
+            }).and_then(|qr| match qr.into_iter().next() {
                 Some(r) => r.map(Some),
-                None => Ok(None)
+                None => Ok(None),
             })
     }
 
@@ -784,7 +828,11 @@ impl<'coll, 'db, 'out, Q, H> PreparedQuery<'coll, 'db, 'out, Q, H>
     /// let items: Result<Vec<_>, _> = result.collect();  // collect all found records into a vector
     /// ```
     pub fn find(self) -> Result<QueryResult> {
-        self.execute(0).map(|(r, n)| QueryResult { result: r, current: 0, total: n })
+        self.execute(0).map(|(r, n)| QueryResult {
+            result: r,
+            current: 0,
+            total: n,
+        })
     }
 
     fn execute(self, flags: u32) -> Result<(ejdb_sys::EJQRESULT, u32)> {
@@ -794,9 +842,8 @@ impl<'coll, 'db, 'out, Q, H> PreparedQuery<'coll, 'db, 'out, Q, H>
         let mut query_doc = Vec::new();
         try!(bson::encode_document(&mut query_doc, query));
 
-        let query = unsafe {
-            ejdb_sys::ejdbcreatequery2(self.coll.db.0, query_doc.as_ptr() as *const _)
-        };
+        let query =
+            unsafe { ejdb_sys::ejdbcreatequery2(self.coll.db.0, query_doc.as_ptr() as *const _) };
         if query.is_null() {
             return self.coll.db.last_error("error creating query object");
         }
@@ -804,7 +851,9 @@ impl<'coll, 'db, 'out, Q, H> PreparedQuery<'coll, 'db, 'out, Q, H>
         struct QueryGuard(*mut ejdb_sys::EJQ);
         impl Drop for QueryGuard {
             fn drop(&mut self) {
-                unsafe { ejdb_sys::ejdbquerydel(self.0); }
+                unsafe {
+                    ejdb_sys::ejdbquerydel(self.0);
+                }
             }
         }
 
@@ -824,7 +873,11 @@ impl<'coll, 'db, 'out, Q, H> PreparedQuery<'coll, 'db, 'out, Q, H>
             query.0 = new_query;
         }
 
-        let mut log = if self.log_out.is_some() { Some(TCXString::new()) } else { None };
+        let mut log = if self.log_out.is_some() {
+            Some(TCXString::new())
+        } else {
+            None
+        };
         let log_ptr = log.as_mut().map(|e| e.as_raw()).unwrap_or(ptr::null_mut());
 
         let mut count = 0;
@@ -853,7 +906,7 @@ impl<'coll, 'db, 'out, Q, H> PreparedQuery<'coll, 'db, 'out, Q, H>
 pub struct QueryResult {
     result: ejdb_sys::EJQRESULT,
     current: c_int,
-    total: u32
+    total: u32,
 }
 
 impl QueryResult {
@@ -861,7 +914,9 @@ impl QueryResult {
     ///
     /// This iterator contains exactly `count()` elements.
     #[inline]
-    pub fn count(&self) -> u32 { self.total }
+    pub fn count(&self) -> u32 {
+        self.total
+    }
 }
 
 impl Drop for QueryResult {
@@ -880,7 +935,9 @@ impl Iterator for QueryResult {
         let item: *const u8 = unsafe {
             ejdb_sys::ejdbqresultbsondata(self.result, self.current, &mut item_size) as *const _
         };
-        if item.is_null() { return None; }
+        if item.is_null() {
+            return None;
+        }
         self.current += 1;
 
         let mut data = unsafe { slice::from_raw_parts(item, item_size as usize) };
@@ -908,9 +965,11 @@ fn test_find() {
     let db = Database::open("/tmp/test_database").unwrap();
     let coll = db.collection("example_collection").unwrap();
 
-    let items = (0..10).map(|i| bson! {
-        "name" => (format!("Me #{}", i)),
-        "age" => (23.8 + i as f64)
+    let items = (0..10).map(|i| {
+        bson! {
+            "name" => (format!("Me #{}", i)),
+            "age" => (23.8 + i as f64)
+        }
     });
     coll.save_all(items).unwrap();
 

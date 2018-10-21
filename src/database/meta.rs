@@ -9,12 +9,12 @@
 //! `into_inner()` method in case you need raw metadata document for some reason.
 
 use std::iter;
-use std::slice;
 use std::ops::Deref;
-use std::str::FromStr;
 use std::result;
+use std::slice;
+use std::str::FromStr;
 
-use bson::{Document, Bson, ValueAccessError};
+use bson::{Bson, Document, ValueAccessError};
 use ejdb_sys;
 
 use super::Database;
@@ -46,9 +46,7 @@ impl Database {
         if doc.is_null() {
             return self.last_error("cannot load metadata");
         } else {
-            let bson_doc = unsafe {
-                try!(EjdbBsonDocument::from_ptr(doc).to_bson())
-            };
+            let bson_doc = unsafe { try!(EjdbBsonDocument::from_ptr(doc).to_bson()) };
             Ok(DatabaseMetadata(bson_doc))
         }
     }
@@ -69,17 +67,24 @@ pub struct DatabaseMetadata(Document);
 impl DatabaseMetadata {
     /// Consumes the metadata object, returning the underlying BSON document.
     #[inline]
-    pub fn into_inner(self) -> Document { self.0 }
+    pub fn into_inner(self) -> Document {
+        self.0
+    }
 
     /// Returns the file name of the main database file.
     pub fn file(&self) -> &str {
-        self.0.get_str("file").expect("cannot get database file name")
+        self.0
+            .get_str("file")
+            .expect("cannot get database file name")
     }
 
     /// Returns an iterator of metadata for each collection in the database.
     pub fn collections(&self) -> Collections {
-        self.0.get_array("collections").expect("cannot get collections metadata")
-            .iter().map(parse_collection_metadata)
+        self.0
+            .get_array("collections")
+            .expect("cannot get collections metadata")
+            .iter()
+            .map(parse_collection_metadata)
     }
 }
 
@@ -87,20 +92,19 @@ impl Deref for DatabaseMetadata {
     type Target = Document;
 
     #[inline]
-    fn deref(&self) -> &Document { &self.0 }
+    fn deref(&self) -> &Document {
+        &self.0
+    }
 }
 
 /// A type alias for collections metadata iterator.
-pub type Collections<'a> = iter::Map<
-    slice::Iter<'a, Bson>,
-    for<'d> fn(&'d Bson) -> CollectionMetadata<'d>
->;
+pub type Collections<'a> =
+    iter::Map<slice::Iter<'a, Bson>, for<'d> fn(&'d Bson) -> CollectionMetadata<'d>>;
 
 fn parse_collection_metadata(bson: &Bson) -> CollectionMetadata {
     match *bson {
         Bson::Document(ref doc) => CollectionMetadata(doc),
-        ref something_else => {
-            panic!("invalid collections metadata: {}", something_else)}
+        ref something_else => panic!("invalid collections metadata: {}", something_else),
     }
 }
 
@@ -121,42 +125,59 @@ impl<'a> CollectionMetadata<'a> {
 
     /// Returns the file path of this collection.
     pub fn file(&self) -> &str {
-        self.0.get_str("file").expect("cannot get collection file name")
+        self.0
+            .get_str("file")
+            .expect("cannot get collection file name")
     }
 
     /// Returns the number of records in this collection.
     pub fn records(&self) -> u64 {
-        self.0.get_i64("records").expect("cannot get collection records count") as u64
+        self.0
+            .get_i64("records")
+            .expect("cannot get collection records count") as u64
     }
 
     fn options(&self) -> &Document {
-        self.0.get_document("options").expect("cannot get collection options")
+        self.0
+            .get_document("options")
+            .expect("cannot get collection options")
     }
 
     /// Returns the number of buckets in this collection.
     pub fn buckets(&self) -> u64 {
-        self.options().get_i64("buckets").expect("cannot get collection buckets count") as u64
+        self.options()
+            .get_i64("buckets")
+            .expect("cannot get collection buckets count") as u64
     }
 
     /// Returns the number of cached records for this collection.
     pub fn cached_records(&self) -> u64 {
-        self.options().get_i64("cachedrecords").expect("cannot get collection cached records count") as u64
+        self.options()
+            .get_i64("cachedrecords")
+            .expect("cannot get collection cached records count") as u64
     }
 
     /// Returns `true` if the collection can hold more than 2GB of data, `false` otherwise.
     pub fn large(&self) -> bool {
-        self.options().get_bool("large").expect("cannot get collection large flag")
+        self.options()
+            .get_bool("large")
+            .expect("cannot get collection large flag")
     }
 
     /// Returns `true` if DEFLATE compression is applied to this collection's records, `false` otherwise.
     pub fn compressed(&self) -> bool {
-        self.options().get_bool("compressed").expect("cannot get collection compressed flag")
+        self.options()
+            .get_bool("compressed")
+            .expect("cannot get collection compressed flag")
     }
 
     /// Returns an iterator of metadata of indices in this collection.
     pub fn indices(&self) -> CollectionIndices {
-        self.0.get_array("indexes").expect("cannot get collection indices array")
-            .iter().map(parse_index_metadata)
+        self.0
+            .get_array("indexes")
+            .expect("cannot get collection indices array")
+            .iter()
+            .map(parse_index_metadata)
     }
 }
 
@@ -164,19 +185,19 @@ impl<'a> Deref for CollectionMetadata<'a> {
     type Target = Document;
 
     #[inline]
-    fn deref(&self) -> &Document { &*self.0 }
+    fn deref(&self) -> &Document {
+        &*self.0
+    }
 }
 
 /// A type alias for indices metadata iterator.
-pub type CollectionIndices<'a> = iter::Map<
-    slice::Iter<'a, Bson>,
-    for<'d> fn(&'d Bson) -> IndexMetadata<'d>
->;
+pub type CollectionIndices<'a> =
+    iter::Map<slice::Iter<'a, Bson>, for<'d> fn(&'d Bson) -> IndexMetadata<'d>>;
 
 fn parse_index_metadata(bson: &Bson) -> IndexMetadata {
     match *bson {
         Bson::Document(ref doc) => IndexMetadata(doc),
-        ref something_else => panic!("invalid index metadata: {}", something_else)
+        ref something_else => panic!("invalid index metadata: {}", something_else),
     }
 }
 
@@ -201,8 +222,11 @@ impl<'a> IndexMetadata<'a> {
 
     /// Returns the type of this index.
     pub fn index_type(&self) -> IndexType {
-        self.0.get_str("type").expect("cannot get index type")
-            .parse().expect("invalid index type")
+        self.0
+            .get_str("type")
+            .expect("cannot get index type")
+            .parse()
+            .expect("invalid index type")
     }
 
     /// Returns the number of records using this index, if available.
@@ -210,7 +234,7 @@ impl<'a> IndexMetadata<'a> {
         match self.0.get_i64("records") {
             Ok(n) => Some(n as u64),
             Err(ValueAccessError::NotPresent) => None,
-            Err(_) => panic!("cannot get index records count")
+            Err(_) => panic!("cannot get index records count"),
         }
     }
 
@@ -219,7 +243,7 @@ impl<'a> IndexMetadata<'a> {
         match self.0.get_str("file") {
             Ok(f) => Some(f),
             Err(ValueAccessError::NotPresent) => None,
-            Err(_) => panic!("cannot get index file")
+            Err(_) => panic!("cannot get index file"),
         }
     }
 }
@@ -228,7 +252,9 @@ impl<'a> Deref for IndexMetadata<'a> {
     type Target = Document;
 
     #[inline]
-    fn deref(&self) -> &Document { &*self.0 }
+    fn deref(&self) -> &Document {
+        &*self.0
+    }
 }
 
 /// Represents an EJDB index type.
@@ -239,7 +265,7 @@ impl<'a> Deref for IndexMetadata<'a> {
 pub enum IndexType {
     Lexical,
     Decimal,
-    Token
+    Token,
 }
 
 impl FromStr for IndexType {
@@ -249,8 +275,8 @@ impl FromStr for IndexType {
         match s {
             "lexical" => Ok(IndexType::Lexical),
             "decimal" => Ok(IndexType::Decimal),
-            "token"   => Ok(IndexType::Token),
-            s => Err(s.into())
+            "token" => Ok(IndexType::Token),
+            s => Err(s.into()),
         }
     }
 }

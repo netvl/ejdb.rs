@@ -1,6 +1,6 @@
 use std::ffi::CString;
 
-use libc::{c_uint, c_int};
+use libc::{c_int, c_uint};
 
 use ejdb_sys;
 
@@ -31,7 +31,7 @@ impl<'db> Collection<'db> {
         Index {
             coll: self,
             key: key.into(),
-            flags: None
+            flags: None,
         }
     }
 }
@@ -71,7 +71,7 @@ impl<'db> Collection<'db> {
 pub struct Index<'coll, 'db: 'coll> {
     coll: &'coll Collection<'db>,
     key: String,
-    flags: Option<c_uint>
+    flags: Option<c_uint>,
 }
 
 impl<'coll, 'db: 'coll> Index<'coll, 'db> {
@@ -79,7 +79,7 @@ impl<'coll, 'db: 'coll> Index<'coll, 'db> {
         Index {
             coll: self.coll,
             key: self.key,
-            flags: Some(self.flags.unwrap_or(0) | flags)
+            flags: Some(self.flags.unwrap_or(0) | flags),
         }
     }
 
@@ -88,7 +88,11 @@ impl<'coll, 'db: 'coll> Index<'coll, 'db> {
     /// `case_sensitive` argument determines whether this index must take string case into account,
     /// `true` for case sensitive matching, `false` for the opposite.
     pub fn string(self, case_sensitive: bool) -> Self {
-        self.add_flags(if case_sensitive { ejdb_sys::JBIDXSTR } else { ejdb_sys::JBIDXISTR })
+        self.add_flags(if case_sensitive {
+            ejdb_sys::JBIDXSTR
+        } else {
+            ejdb_sys::JBIDXISTR
+        })
     }
 
     /// Specifies that this index must be built over numeric values of this field.
@@ -137,20 +141,26 @@ impl<'coll, 'db: 'coll> Index<'coll, 'db> {
 
     fn check_type(self) -> Self {
         let flags = self.flags.expect("index type is not specified");
-        assert!([
-            ejdb_sys::JBIDXSTR, ejdb_sys::JBIDXISTR,
-            ejdb_sys::JBIDXNUM, ejdb_sys::JBIDXARR
-        ].iter().any(|&f| flags & f != 0), "index type is not specified");
+        assert!(
+            [
+                ejdb_sys::JBIDXSTR,
+                ejdb_sys::JBIDXISTR,
+                ejdb_sys::JBIDXNUM,
+                ejdb_sys::JBIDXARR
+            ]
+                .iter()
+                .any(|&f| flags & f != 0),
+            "index type is not specified"
+        );
         self
     }
 
     fn execute(self) -> Result<()> {
-        let flags = self.flags.expect("index flags are not defined");  // should always unwrap
+        let flags = self.flags.expect("index flags are not defined"); // should always unwrap
         let key = try!(CString::new(self.key).map_err(|_| "invalid key"));
-        let result = unsafe {
-            ejdb_sys::ejdbsetindex(self.coll.coll, key.as_ptr(), flags as c_int)
-        };
-        if result != 0 {
+        let result =
+            unsafe { ejdb_sys::ejdbsetindex(self.coll.coll, key.as_ptr(), flags as c_int) };
+        if result {
             Ok(())
         } else {
             self.coll.db.last_error("cannot update index")

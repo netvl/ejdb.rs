@@ -24,7 +24,9 @@ impl<'db> Collection<'db> {
     /// // transaction is now active until `tx` goes out of scope or otherwise consumed
     /// ```
     #[inline]
-    pub fn begin_transaction(&self) -> Result<Transaction> { Transaction::new(self) }
+    pub fn begin_transaction(&self) -> Result<Transaction> {
+        Transaction::new(self)
+    }
 
     /// Checks whether there is an active transaction on this collection.
     ///
@@ -42,14 +44,13 @@ impl<'db> Collection<'db> {
     /// assert!(coll.transaction_active().unwrap());
     /// ```
     pub fn transaction_active(&self) -> Result<bool> {
-        let mut result = 0;
-        if unsafe { ejdb_sys::ejdbtranstatus(self.coll, &mut result) != 0 } {
-            Ok(result != 0)
+        let mut result = false;
+        if unsafe { ejdb_sys::ejdbtranstatus(self.coll, &mut result) } {
+            Ok(result)
         } else {
             self.db.last_error("error getting transaction status")
         }
     }
-
 }
 
 /// Represents an active transaction.
@@ -78,21 +79,25 @@ impl<'db> Collection<'db> {
 pub struct Transaction<'coll, 'db: 'coll> {
     coll: &'coll Collection<'db>,
     commit: bool,
-    finished: bool
+    finished: bool,
 }
 
 impl<'coll, 'db> Drop for Transaction<'coll, 'db> {
     fn drop(&mut self) {
-        let _ = self.finish_mut();  // ignore the result
+        let _ = self.finish_mut(); // ignore the result
     }
 }
 
 impl<'coll, 'db> Transaction<'coll, 'db> {
     fn new(coll: &'coll Collection<'db>) -> Result<Transaction<'coll, 'db>> {
-        if unsafe { ejdb_sys::ejdbtranbegin(coll.coll) != 0 } {
+        if unsafe { ejdb_sys::ejdbtranbegin(coll.coll) } {
             coll.db.last_error("error opening transaction")
         } else {
-            Ok(Transaction { coll: coll, commit: false, finished: false })
+            Ok(Transaction {
+                coll: coll,
+                commit: false,
+                finished: false,
+            })
         }
     }
 
@@ -101,51 +106,78 @@ impl<'coll, 'db> Transaction<'coll, 'db> {
     /// Returns `true` if this transaction will be committed when dropped or when `finish()`
     /// method is called.
     #[inline]
-    pub fn will_commit(&self) -> bool { self.commit }
+    pub fn will_commit(&self) -> bool {
+        self.commit
+    }
 
     /// Checks whether this transaction will be aborted upon drop.
     ///
     /// Returns `true` if this transaction will be aborted when dropped or when `finish()`
     /// method is called.
     #[inline]
-    pub fn will_abort(&self) -> bool { !self.commit }
+    pub fn will_abort(&self) -> bool {
+        !self.commit
+    }
 
     /// Makes this transaction commit when dropped.
     #[inline]
-    pub fn set_commit(&mut self) { self.commit = true; }
+    pub fn set_commit(&mut self) {
+        self.commit = true;
+    }
 
     /// Makes this transaction abort when dropped.
     #[inline]
-    pub fn set_abort(&mut self) { self.commit = false; }
+    pub fn set_abort(&mut self) {
+        self.commit = false;
+    }
 
     /// Aborts or commits the transaction depending on the finish mode.
     ///
     /// The mode can be changed with `set_commit()` and `set_abort()` methods.
     #[inline]
-    pub fn finish(mut self) -> Result<()> { self.finish_mut() }
+    pub fn finish(mut self) -> Result<()> {
+        self.finish_mut()
+    }
 
     /// Attempts to commit this transaction.
     #[inline]
-    pub fn commit(mut self) -> Result<()> { self.commit_mut() }
+    pub fn commit(mut self) -> Result<()> {
+        self.commit_mut()
+    }
 
     /// Attempts to abort this transaction.
     #[inline]
-    pub fn abort(mut self) -> Result<()> { self.abort_mut() }
+    pub fn abort(mut self) -> Result<()> {
+        self.abort_mut()
+    }
 
     fn finish_mut(&mut self) -> Result<()> {
-        if self.finished { Ok(()) }
-        else { if self.commit { self.commit_mut() } else { self.abort_mut() } }
+        if self.finished {
+            Ok(())
+        } else {
+            if self.commit {
+                self.commit_mut()
+            } else {
+                self.abort_mut()
+            }
+        }
     }
 
     fn commit_mut(&mut self) -> Result<()> {
         self.finished = true;
-        if unsafe { ejdb_sys::ejdbtrancommit(self.coll.coll) != 0 } { Ok(()) }
-        else { self.coll.db.last_error("error commiting transaction") }
+        if unsafe { ejdb_sys::ejdbtrancommit(self.coll.coll) } {
+            Ok(())
+        } else {
+            self.coll.db.last_error("error commiting transaction")
+        }
     }
 
     fn abort_mut(&mut self) -> Result<()> {
         self.finished = true;
-        if unsafe { ejdb_sys::ejdbtranabort(self.coll.coll) != 0 } { Ok(()) }
-        else { self.coll.db.last_error("error aborting transaction") }
+        if unsafe { ejdb_sys::ejdbtranabort(self.coll.coll) } {
+            Ok(())
+        } else {
+            self.coll.db.last_error("error aborting transaction")
+        }
     }
 }

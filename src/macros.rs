@@ -1,4 +1,3 @@
-
 /// A convenience macro to construct BSON documents.
 ///
 /// It is very similar to `bson!/doc!` macros provided by `bson` crate, but somewhat
@@ -95,7 +94,7 @@ macro_rules! bson {
         if let Some(v) = $v {
             $tgt.insert($k, $crate::bson::Bson::from(v));
         }
-        bson! { @collect $tgt, $($rest)* } 
+        bson! { @collect $tgt, $($rest)* }
     }};
     { @collect $tgt:ident, $k:expr => $v:tt, $($rest:tt)* } => {{
         $tgt.insert($k, bson!($v));

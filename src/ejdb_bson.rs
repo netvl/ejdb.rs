@@ -8,9 +8,9 @@
 
 use std::slice;
 
-use ejdb_sys;
-use bson::{self, Document, EncoderResult, DecoderResult};
 use bson::oid;
+use bson::{self, DecoderResult, Document, EncoderResult};
+use ejdb_sys;
 
 pub struct EjdbBsonDocument(*mut ejdb_sys::bson);
 
@@ -35,9 +35,10 @@ impl EjdbBsonDocument {
     #[inline]
     pub fn from_buffer(buf: &[u8]) -> EjdbBsonDocument {
         unsafe {
-            EjdbBsonDocument(
-                ejdb_sys::bson_create_from_buffer(buf.as_ptr() as *const _, buf.len() as i32)
-            )
+            EjdbBsonDocument(ejdb_sys::bson_create_from_buffer(
+                buf.as_ptr() as *const _,
+                buf.len() as i32,
+            ))
         }
     }
 
@@ -55,10 +56,14 @@ impl EjdbBsonDocument {
     }
 
     #[inline]
-    pub fn as_raw(&self) -> *const ejdb_sys::bson { self.0 as *const _ }
+    pub fn as_raw(&self) -> *const ejdb_sys::bson {
+        self.0 as *const _
+    }
 
     #[inline]
-    pub fn as_raw_mut(&mut self) -> *mut ejdb_sys::bson { self.0 as *mut _ }
+    pub fn as_raw_mut(&mut self) -> *mut ejdb_sys::bson {
+        self.0 as *mut _
+    }
 }
 
 impl Drop for EjdbBsonDocument {
@@ -75,45 +80,82 @@ pub struct EjdbObjectId(ejdb_sys::bson_oid_t);
 impl EjdbObjectId {
     #[inline]
     pub fn empty() -> EjdbObjectId {
-        EjdbObjectId(ejdb_sys::bson_oid_t::default())
+        let empty_arr: [i8; 12] = [0; 12];
+        EjdbObjectId(ejdb_sys::bson_oid_t { bytes: empty_arr })
     }
 
     #[inline]
     pub fn to_rust(self) -> oid::ObjectId {
-        oid::ObjectId::with_bytes((self.0)._bindgen_data_)
+        let bytes: [i8; 12];
+        unsafe {
+            bytes = (self.0).bytes;
+        }
+        oid::ObjectId::with_bytes(to_u(bytes))
     }
 
     #[inline]
     pub fn from_rust(oid: oid::ObjectId) -> EjdbObjectId {
-        EjdbObjectId(ejdb_sys::bson_oid_t { _bindgen_data_: oid.bytes() })
+        EjdbObjectId(ejdb_sys::bson_oid_t {
+            bytes: to_i(oid.bytes()),
+        })
     }
 
     #[inline]
-    pub fn to_ejdb(self) -> ejdb_sys::bson_oid_t { self.0 }
+    pub fn to_ejdb(self) -> ejdb_sys::bson_oid_t {
+        self.0
+    }
 
     #[inline]
-    pub fn as_raw(&self)-> *const ejdb_sys::bson_oid_t { &self.0 }
+    pub fn as_raw(&self) -> *const ejdb_sys::bson_oid_t {
+        &self.0
+    }
 
     #[inline]
-    pub fn as_raw_mut(&mut self) -> *mut ejdb_sys::bson_oid_t { &mut self.0 }
+    pub fn as_raw_mut(&mut self) -> *mut ejdb_sys::bson_oid_t {
+        &mut self.0
+    }
 }
 
 impl From<ejdb_sys::bson_oid_t> for EjdbObjectId {
     #[inline]
-    fn from(oid: ejdb_sys::bson_oid_t) -> EjdbObjectId { EjdbObjectId(oid) }
+    fn from(oid: ejdb_sys::bson_oid_t) -> EjdbObjectId {
+        EjdbObjectId(oid)
+    }
 }
 
 impl From<oid::ObjectId> for EjdbObjectId {
     #[inline]
-    fn from(oid: oid::ObjectId) -> EjdbObjectId { EjdbObjectId::from_rust(oid) }
+    fn from(oid: oid::ObjectId) -> EjdbObjectId {
+        EjdbObjectId::from_rust(oid)
+    }
 }
 
 impl Into<ejdb_sys::bson_oid_t> for EjdbObjectId {
     #[inline]
-    fn into(self) -> ejdb_sys::bson_oid_t { self.to_ejdb() }
+    fn into(self) -> ejdb_sys::bson_oid_t {
+        self.to_ejdb()
+    }
 }
 
 impl Into<oid::ObjectId> for EjdbObjectId {
     #[inline]
-    fn into(self) -> oid::ObjectId { self.to_rust() }
+    fn into(self) -> oid::ObjectId {
+        self.to_rust()
+    }
+}
+
+fn to_i(arr: [u8; 12]) -> [i8; 12] {
+    let mut result: [i8; 12] = [0; 12];
+    for i in 0..arr.len() {
+        result[i] = arr[i] as i8;
+    }
+    return result;
+}
+
+fn to_u(arr: [i8; 12]) -> [u8; 12] {
+    let mut result: [u8; 12] = [0; 12];
+    for i in 0..arr.len() {
+        result[i] = arr[i] as u8;
+    }
+    return result;
 }

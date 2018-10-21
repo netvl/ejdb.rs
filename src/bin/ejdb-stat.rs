@@ -21,7 +21,8 @@ fn main() {
     let db = Database::open(db_path).unwrap_or_else(|e| abort!(1, "Error opening database: {}", e));
 
     println!("Metadata:");
-    let meta = db.get_metadata()
+    let meta = db
+        .get_metadata()
         .unwrap_or_else(|e| abort!(1, "Error loading metadata: {}", e));
     println!("{}", bson::Bson::Document(meta.into_inner()));
 }

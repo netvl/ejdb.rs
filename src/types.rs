@@ -1,10 +1,10 @@
 //! Various common types.
 
-use std::result;
 use std::borrow::Cow;
-use std::io;
-use std::fmt;
 use std::error;
+use std::fmt;
+use std::io;
+use std::result;
 
 use bson::{self, oid};
 use itertools::Itertools;
@@ -18,12 +18,16 @@ pub struct PartialSave {
     /// The actual cause of the partial save error.
     pub cause: Box<Error>,
     /// A vector of object ids which have been inserted successfully.
-    pub successful_ids: Vec<oid::ObjectId>
+    pub successful_ids: Vec<oid::ObjectId>,
 }
 
 impl error::Error for PartialSave {
-    fn description(&self) -> &str { "save operation completed partially" }
-    fn cause(&self) -> Option<&error::Error> { Some(&*self.cause) }
+    fn description(&self) -> &str {
+        "save operation completed partially"
+    }
+    fn cause(&self) -> Option<&error::Error> {
+        Some(&*self.cause)
+    }
 }
 
 struct OidHexDisplay(oid::ObjectId);
@@ -32,7 +36,8 @@ impl fmt::Display for OidHexDisplay {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         static CHARS: &'static [u8] = b"0123456789abcdef";
         for &byte in &self.0.bytes() {
-            try!(write!(f,
+            try!(write!(
+                f,
                 "{}{}",
                 CHARS[(byte >> 4) as usize] as char,
                 CHARS[(byte & 0xf) as usize] as char
@@ -47,9 +52,14 @@ impl fmt::Display for PartialSave {
         if self.successful_ids.is_empty() {
             write!(f, "saved nothing due to an error: {}", self.cause)
         } else {
-            write!(f,
+            write!(
+                f,
                 "only saved objects with ids: [{}] due to an error: {}",
-                self.successful_ids.iter().cloned().map(OidHexDisplay).join(", "),
+                self.successful_ids
+                    .iter()
+                    .cloned()
+                    .map(OidHexDisplay)
+                    .join(", "),
                 self.cause
             )
         }
