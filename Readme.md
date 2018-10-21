@@ -27,7 +27,7 @@ Add a dependency in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ejdb = "0.3"
+ejdb = "0.4"
 ```
 
 To build the library, you need to have libejdb installed and its pkg-config file available
@@ -35,6 +35,9 @@ in the correct place for your operating system. Usually this requires just to in
 the respective package using your system's native package manager.
 
 ## Changelog
+
+### Version 0.4.0
+* Link ejdb statically
 
 ### Version 0.3.0
 
