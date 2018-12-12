@@ -18,7 +18,7 @@ bson = "0.13"
 bitflags = "1.0"
 quick-error = "1.2"
 libc = "0.2"
-itertools = "0.7"
+itertools = "0.8"
 
 [dev-dependencies]
 tempdir = "0.3"
