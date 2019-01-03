@@ -30,9 +30,7 @@ Add a dependency in your `Cargo.toml`:
 ejdb = "0.4"
 ```
 
-To build the library, you need to have libejdb installed and its pkg-config file available
-in the correct place for your operating system. Usually this requires just to install
-the respective package using your system's native package manager.
+To build the library, you need to have `cmake` installaled along with `gcc` and `clang`. 
 
 ## Changelog
 

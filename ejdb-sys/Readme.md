@@ -11,7 +11,7 @@ Add a dependency in your `Cargo.toml`:
 [dependencies]
 ejdb-sys = "0.3"
 ```
-To compile you need to have `cmake` installaled along with `gcc`. 
+To compile you need to have `cmake` installaled along with `gcc` and `clang`. 
 In runtime you need to have `gzlib` installed and available through pkg-config (almost all distros have it preinstalled).
 
 
