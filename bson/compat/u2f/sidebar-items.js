@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["deserialize","Deserialize unsigned types to `Bson::FloatingPoint`"],["serialize","Serialize unsigned types to `Bson::FloatingPoint`"]],"trait":[["FromF64","Converts from `f64` value"],["ToF64","Converts primitive unsigned types to `f64`"]]});

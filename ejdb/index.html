@@ -1,0 +1,172 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `ejdb` crate."><meta name="keywords" content="rust, rustlang, rust-lang, ejdb"><title>ejdb - Rust</title><link rel="stylesheet" type="text/css" href="../normalize.css"><link rel="stylesheet" type="text/css" href="../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../dark.css"><link rel="stylesheet" type="text/css" href="../light.css" id="themeStyle"><script src="../storage.js"></script><noscript><link rel="stylesheet" href="../noscript.css"></noscript><style type="text/css">#crate-search{background-image:url("../down-arrow.svg");}</style></head><body class="rustdoc mod"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><p class='location'>Crate ejdb</p><div class="sidebar-elems"><a id='all-types' href='all.html'><p>See all ejdb's items</p></a><div class="block items"><ul><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li></ul></div><p class='location'></p><script>window.sidebarCurrent = {name: 'ejdb', ty: 'mod', relpath: '../'};</script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../theme.js"></script><nav class="sub"><form class="search-form js-only"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><a id="settings-menu" href="../settings.html"><img src="../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class='fqn'><span class='out-of-band'><span id='render-detail'><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class='inner'>&#x2212;</span>]</a></span><a class='srclink' href='../src/ejdb/lib.rs.html#1-238' title='goto source code'>[src]</a></span><span class='in-band'>Crate <a class="mod" href=''>ejdb</a></span></h1><div class='docblock'><p>Safe and idiomatic Rust bindings for EJDB, a MongoDB-like embedded database library.</p>
+<p>ejdb.rs provides an interface for <a href="http://ejdb.org/">EJDB</a>, an embeddable JSON-based document database
+library. Think of it as SQLite-like MongoDB. EJDB attempts to be compatible (to some extent)
+with MongoDB basic concepts and query language, so if you have any experience with MongoDB,
+learning EJDB will be easy.</p>
+<p>EJDB uses BSON internally, just like MongoDB, so ejdb.rs uses <a href="https://crates.io/crates/bson">bson-rs</a> crate, which is
+reexported as <code>ejdb::bson</code> module. Please note that it is important to use types and
+functions from <code>ejdb::bson</code> module, not loading <code>bson</code> with <code>extern crate</code>, because of
+possible version incompatibilities. <code>bson!</code> macro provided by this crate also uses
+types from <code>ejdb::bson</code>.</p>
+<p>The central type in this library is <code>Database</code> structure. It represents an opened
+EJDB database. An EJDB database usually consists of several files: the database itself,
+a file for each collection and a file for each index. Therefore, it makes sense to
+dedicate a whole directory for EJDB database files. However, <code>Database::open()</code> method
+and its comrades accepts a path to the database file itself, not the directory.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered">
+<span class="kw">use</span> <span class="ident">ejdb</span>::<span class="ident">Database</span>;
+
+<span class="kw">let</span> <span class="ident">db</span> <span class="op">=</span> <span class="ident">Database</span>::<span class="ident">open</span>(<span class="string">&quot;/path/to/db&quot;</span>).<span class="ident">unwrap</span>();</pre></div>
+<p><code>Database</code>'s <code>Drop</code> implementation closes the database automatically according to RAII pattern.</p>
+<p>The database can be opened in various modes; see <code>DatabaseOpenMode</code> structure for
+more information.</p>
+<p>After the database is opened, you can obtain collections out of it. It is done
+primarily with <code>Database::collection()</code> method:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered">
+<span class="kw">let</span> <span class="ident">coll</span> <span class="op">=</span> <span class="ident">db</span>.<span class="ident">collection</span>(<span class="string">&quot;some_collection&quot;</span>).<span class="ident">unwrap</span>();</pre></div>
+<p><code>Database::collection()</code> method returns an existing collection or creates a new one
+with the default options. See <code>CollectionOptions</code> structure for more information about
+which options collections have.</p>
+<p>A collection may be used to perform queries, initiate transactions or save/load BSON
+documents by their identifiers directly, without using queries. Collection objects
+can also be used to manage indices.</p>
+<h2 id="savingloading-bson-documents" class="section-header"><a href="#savingloading-bson-documents">Saving/loading BSON documents</a></h2>
+<p>You can use <code>Collection::save()</code> or <code>Collection::save_all()</code> methods to store BSON documents
+directly into the collection, and <code>Collection::load()</code> to load a document by its id:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered">
+<span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">d</span> <span class="op">=</span> <span class="macro">bson</span><span class="macro">!</span> {
+    <span class="string">&quot;name&quot;</span> <span class="op">=&gt;</span> <span class="string">&quot;Foo Bar&quot;</span>,
+    <span class="string">&quot;count&quot;</span> <span class="op">=&gt;</span> <span class="number">10</span>
+};
+<span class="kw">let</span> <span class="ident">inserted_id</span> <span class="op">=</span> <span class="ident">coll</span>.<span class="ident">save</span>(<span class="kw-2">&amp;</span><span class="ident">d</span>).<span class="ident">unwrap</span>();
+
+<span class="ident">d</span>.<span class="ident">insert</span>(<span class="string">&quot;_id&quot;</span>, <span class="ident">inserted_id</span>.<span class="ident">clone</span>());
+<span class="kw">let</span> <span class="ident">d2</span> <span class="op">=</span> <span class="ident">coll</span>.<span class="ident">load</span>(<span class="kw-2">&amp;</span><span class="ident">inserted_id</span>).<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
+<span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">d</span>, <span class="ident">d2</span>);</pre></div>
+<p>If the <code>_id</code> field is not present in the BSON document, it will be generated and added
+automatically.</p>
+<p><code>Collection::save_all()</code> method is implemented over <code>Collection::save()</code> and returns a
+special kind of error which contains information about errors for each save operation,
+if any.</p>
+<h2 id="performing-queries" class="section-header"><a href="#performing-queries">Performing queries</a></h2>
+<p>EJDB supports a pretty large subset of operations provided by MongoDB, and even has
+its own unique queries, like joins.</p>
+<p>Queries are performed with <code>Collection::query()</code> method which accepts, two arguments:
+anything which can be borrowed into a <code>Query</code> and anything which can be borrowed into
+a <code>QueryHints</code>. <code>Query</code> is the actual query, i.e. constraints on the data in a collection,
+and <code>QueryHints</code> alter the way the query is processed and returned.</p>
+<p>Both query and query hints are just BSON documents of <a href="http://ejdb.org/doc/ql/ql.html">special format</a>, therefore
+ejdb.rs provides the respective <code>From&lt;bson::Document&gt;</code>/<code>Into&lt;bson::Document&gt;</code> for both
+<code>Query</code> and <code>QueryHints</code>; however, it is recommended to use the builder API instead
+of constructing queries manually because this way it is much harder to create invalid queries.
+Naturally, invalid queries are by no means unsafe in Rust sense - if such a query is passed
+for execution, an error will be returned.</p>
+<p>Query builder API provides two entry points, <code>ejdb::query::Q</code> and <code>ejdb::query::QH</code>, which
+are kind of aliases for <code>Query::new()</code> and <code>QueryHints::new()</code> but look arguably nicer.
+To run a query, pass an instance of <code>Query</code> and <code>QueryHints</code> to <code>Collection::query()</code> method.
+The latter returns a <code>ejdb::PreparedQuery</code> instance which can be used to execute the query
+in various ways.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered">
+<span class="kw">use</span> <span class="ident">ejdb</span>::<span class="ident">query</span>::{<span class="ident">Q</span>, <span class="ident">QH</span>};
+<span class="kw">use</span> <span class="ident">ejdb</span>::<span class="ident">bson</span>;
+<span class="kw">use</span> <span class="ident">ejdb</span>::<span class="prelude-ty">Result</span>;
+
+<span class="kw">let</span> <span class="ident">n</span> <span class="op">=</span> <span class="ident">coll</span>.<span class="ident">query</span>(<span class="ident">Q</span>.<span class="ident">field</span>(<span class="string">&quot;name&quot;</span>).<span class="ident">eq</span>(<span class="string">&quot;Foo&quot;</span>).<span class="ident">set</span>(<span class="string">&quot;count&quot;</span>, <span class="number">10</span>), <span class="ident">QH</span>.<span class="ident">empty</span>()).<span class="ident">update</span>().<span class="ident">unwrap</span>();
+<span class="comment">// `n` is the number of affected rows</span>
+
+<span class="kw">let</span> <span class="ident">names</span> <span class="op">=</span> [<span class="string">&quot;foo&quot;</span>, <span class="string">&quot;bar&quot;</span>, <span class="string">&quot;baz&quot;</span>];
+<span class="kw">let</span> <span class="ident">items</span> <span class="op">=</span> <span class="ident">coll</span>.<span class="ident">query</span>(<span class="ident">Q</span>.<span class="ident">field</span>(<span class="string">&quot;name&quot;</span>).<span class="ident">contained_in</span>(<span class="ident">names</span>.<span class="ident">iter</span>().<span class="ident">cloned</span>()), <span class="ident">QH</span>.<span class="ident">max</span>(<span class="number">12</span>))
+    .<span class="ident">find</span>().<span class="ident">unwrap</span>();
+<span class="comment">// `items` is an iterator which contains at maximum 12 records whose `name`</span>
+<span class="comment">// field is either &quot;foo&quot;, &quot;bar&quot; or &quot;baz&quot;</span>
+<span class="kw">let</span> <span class="ident">items</span>: <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">bson</span>::<span class="ident">Document</span><span class="op">&gt;&gt;</span> <span class="op">=</span> <span class="ident">items</span>.<span class="ident">collect</span>();  <span class="comment">// collect them into a vector</span>
+
+<span class="kw">let</span> <span class="ident">item</span> <span class="op">=</span> <span class="ident">coll</span>.<span class="ident">query</span>(<span class="ident">Q</span>.<span class="ident">field</span>(<span class="string">&quot;count&quot;</span>).<span class="ident">between</span>(<span class="op">-</span><span class="number">10</span>, <span class="number">10.2</span>), <span class="ident">QH</span>.<span class="ident">field</span>(<span class="string">&quot;name&quot;</span>).<span class="ident">include</span>())
+    .<span class="ident">find_one</span>().<span class="ident">unwrap</span>();
+<span class="comment">// `item` is an `Option&lt;bson::Document&gt;` which contains a record whose `count` field</span>
+<span class="comment">// is between -10 and 10.2, inclusive, if there is one, and this document will only contain</span>
+<span class="comment">// `name` field.</span>
+
+<span class="kw">let</span> <span class="ident">n</span> <span class="op">=</span> <span class="ident">coll</span>.<span class="ident">query</span>(<span class="ident">Q</span>.<span class="ident">field</span>(<span class="string">&quot;name&quot;</span>).<span class="ident">exists</span>(<span class="bool-val">true</span>), <span class="ident">QH</span>.<span class="ident">empty</span>()).<span class="ident">count</span>().<span class="ident">unwrap</span>();
+<span class="comment">// `n` is the number of records which contain `name` field</span></pre></div>
+<h2 id="transactions" class="section-header"><a href="#transactions">Transactions</a></h2>
+<p>You can use <code>Collection::begin_transaction()</code> method which will start a transaction over
+this collection. Citing the official documentation:</p>
+<blockquote>
+<p>EJDB provides atomic and durable non parallel and read-uncommitted collection level
+transactions, i.e., There is only one transaction for collection is active for a single
+point in a time. The data written in a transaction is visible for other non transactional
+readers. EJDB transaction system utilizes write ahead logging to provide consistent
+transaction rollbacks.</p>
+</blockquote>
+<p>Transactions in ejdb.rs are implemented with RAII pattern: a transaction is represented
+by a guard object. When this object is dropped, the transaction is committed or aborted.
+By default it is aborted; but you can change the default behavior with corresponding methods.
+Alternatively, you can explicitly commit or abort the transaction with <code>Transaction::commit()</code>
+or <code>Transaction::abort()</code>, respectively. Additionally, these methods return a <code>Result&lt;()&gt;</code>
+which can be used to track errors; when the transaction is closed on its drop, the result
+is ignored.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered">
+<span class="kw">loop</span> {
+    <span class="kw">let</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">coll</span>.<span class="ident">begin_transaction</span>().<span class="ident">unwrap</span>();
+    <span class="comment">// execute queries and other operations</span>
+    <span class="comment">// if some error happens and the loop exits prematurely, e.g. through unwinding,</span>
+    <span class="comment">// the transaction will be aborted automatically</span>
+
+    <span class="comment">// try to commit the transaction and try again if there is an error</span>
+    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="kw">_</span>) <span class="op">=</span> <span class="ident">tx</span>.<span class="ident">commit</span>() {
+        <span class="kw">break</span>;
+    }
+}</pre></div>
+<h2 id="indices" class="section-header"><a href="#indices">Indices</a></h2>
+<p>It is also possible to use <code>Collection::index()</code> method to configure indices in the collection.
+<code>index()</code> accepts the name of the field on which the user needs to configure indices; it
+returns a builder-like object which can be used to tweak indices on this field.</p>
+<p>In EJDB a field can have several associated indices of different types, which is important
+for heterogeneous fields. It is also possible to rebuild and optimize indices. This can
+be done with the respective methods on <code>Index</code> structure returned by <code>Collection::index()</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered">
+<span class="comment">// create a case-sensitive string index on field `name`</span>
+<span class="ident">coll</span>.<span class="ident">index</span>(<span class="string">&quot;name&quot;</span>).<span class="ident">string</span>(<span class="bool-val">true</span>).<span class="ident">set</span>().<span class="ident">unwrap</span>();
+
+<span class="comment">// create case-insensitive string and numeric indices on field `title`</span>
+<span class="ident">coll</span>.<span class="ident">index</span>(<span class="string">&quot;title&quot;</span>).<span class="ident">number</span>().<span class="ident">string</span>(<span class="bool-val">false</span>).<span class="ident">set</span>().<span class="ident">unwrap</span>();
+
+<span class="comment">// remove number and array indices from field `items`</span>
+<span class="ident">coll</span>.<span class="ident">index</span>(<span class="string">&quot;items&quot;</span>).<span class="ident">number</span>().<span class="ident">array</span>().<span class="ident">drop</span>().<span class="ident">unwrap</span>();
+
+<span class="comment">// optimize string index on field `name`</span>
+<span class="ident">coll</span>.<span class="ident">index</span>(<span class="string">&quot;name&quot;</span>).<span class="ident">string</span>(<span class="bool-val">true</span>).<span class="ident">optimize</span>().<span class="ident">unwrap</span>();
+
+<span class="comment">// drop all indices on field `properties`</span>
+<span class="ident">coll</span>.<span class="ident">index</span>(<span class="string">&quot;properties&quot;</span>).<span class="ident">drop_all</span>();</pre></div>
+<p>All consuming methods except for <code>Index::drop_all()</code> will panic if index type is not
+specified before their invocation:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered">
+<span class="ident">coll</span>.<span class="ident">index</span>(<span class="string">&quot;name&quot;</span>).<span class="ident">set</span>();  <span class="comment">// will panic</span></pre></div>
+</div><h2 id='reexports' class='section-header'><a href="#reexports">Re-exports</a></h2>
+<table><tr><td><code>pub extern crate <a class="mod" href="../bson/index.html" title="mod bson">bson</a> as bson_crate;</code></td></tr><tr><td><code>pub extern crate <a class="mod" href="../ejdb_sys/index.html" title="mod ejdb_sys">ejdb_sys</a>;</code></td></tr><tr><td><code>pub use <a class="mod" href="../bson/index.html" title="mod bson">bson_crate</a> as bson;</code></td></tr><tr><td><code>pub use types::<a class="enum" href="../ejdb/types/enum.Error.html" title="enum ejdb::types::Error">Error</a>;</code></td></tr><tr><td><code>pub use types::<a class="type" href="../ejdb/types/type.Result.html" title="type ejdb::types::Result">Result</a>;</code></td></tr></table><h2 id='modules' class='section-header'><a href="#modules">Modules</a></h2>
+<table><tr class='module-item'><td><a class="mod" href="ejdb_bson/index.html" title='ejdb::ejdb_bson mod'>ejdb_bson</a></td><td class='docblock-short'><p>Contains low-level utilities for conversion between Rust and EJDB BSON representations.</p>
+</td></tr><tr class='module-item'><td><a class="mod" href="meta/index.html" title='ejdb::meta mod'>meta</a></td><td class='docblock-short'><p>Types returned by metadata query method on <code>Database</code> structure.</p>
+</td></tr><tr class='module-item'><td><a class="mod" href="open_mode/index.html" title='ejdb::open_mode mod'>open_mode</a></td><td class='docblock-short'><p>Database open mode constants.</p>
+</td></tr><tr class='module-item'><td><a class="mod" href="query/index.html" title='ejdb::query mod'>query</a></td><td class='docblock-short'><p>Query API, a simple builder-like constructor for EJDB queries.</p>
+</td></tr><tr class='module-item'><td><a class="mod" href="types/index.html" title='ejdb::types mod'>types</a></td><td class='docblock-short'><p>Various common types.</p>
+</td></tr></table><h2 id='macros' class='section-header'><a href="#macros">Macros</a></h2>
+<table><tr class='module-item'><td><a class="macro" href="macro.bson.html" title='ejdb::bson macro'>bson</a></td><td class='docblock-short'><p>A convenience macro to construct BSON documents.</p>
+</td></tr></table><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table><tr class='module-item'><td><a class="struct" href="struct.Collection.html" title='ejdb::Collection struct'>Collection</a></td><td class='docblock-short'><p>A handle to an EJDB collection.</p>
+</td></tr><tr class='module-item'><td><a class="struct" href="struct.CollectionOptions.html" title='ejdb::CollectionOptions struct'>CollectionOptions</a></td><td class='docblock-short'><p>Represents a set of options of an EJDB collection.</p>
+</td></tr><tr class='module-item'><td><a class="struct" href="struct.Database.html" title='ejdb::Database struct'>Database</a></td><td class='docblock-short'><p>An EJDB database handle.</p>
+</td></tr><tr class='module-item'><td><a class="struct" href="struct.DatabaseOpenMode.html" title='ejdb::DatabaseOpenMode struct'>DatabaseOpenMode</a></td><td class='docblock-short'><p>Several bit flags defining how an EJDB database should be opened.</p>
+</td></tr><tr class='module-item'><td><a class="struct" href="struct.Index.html" title='ejdb::Index struct'>Index</a></td><td class='docblock-short'><p>A builder for an operation on an index of a certain field of an EJDB collection.</p>
+</td></tr><tr class='module-item'><td><a class="struct" href="struct.PreparedQuery.html" title='ejdb::PreparedQuery struct'>PreparedQuery</a></td><td class='docblock-short'><p>Represents a query which is ready to be executed.</p>
+</td></tr><tr class='module-item'><td><a class="struct" href="struct.QueryResult.html" title='ejdb::QueryResult struct'>QueryResult</a></td><td class='docblock-short'><p>An iterator over EJDB query results.</p>
+</td></tr><tr class='module-item'><td><a class="struct" href="struct.Transaction.html" title='ejdb::Transaction struct'>Transaction</a></td><td class='docblock-short'><p>Represents an active transaction.</p>
+</td></tr></table></section><section id="search" class="content hidden"></section><section class="footer"></section><aside id="help" class="hidden"><div><h1 class="hidden">Help</h1><div class="shortcuts"><h2>Keyboard Shortcuts</h2><dl><dt><kbd>?</kbd></dt><dd>Show this help dialog</dd><dt><kbd>S</kbd></dt><dd>Focus the search field</dd><dt><kbd>↑</kbd></dt><dd>Move up in search results</dd><dt><kbd>↓</kbd></dt><dd>Move down in search results</dd><dt><kbd>↹</kbd></dt><dd>Switch tab</dd><dt><kbd>&#9166;</kbd></dt><dd>Go to active search result</dd><dt><kbd>+</kbd></dt><dd>Expand all sections</dd><dt><kbd>-</kbd></dt><dd>Collapse all sections</dd></dl></div><div class="infos"><h2>Search Tricks</h2><p>Prefix searches with a type followed by a colon (e.g., <code>fn:</code>) to restrict the search to a given type.</p><p>Accepted types are: <code>fn</code>, <code>mod</code>, <code>struct</code>, <code>enum</code>, <code>trait</code>, <code>type</code>, <code>macro</code>, and <code>const</code>.</p><p>Search functions by type signature (e.g., <code>vec -> usize</code> or <code>* -> vec</code>)</p><p>Search multiple things at once by splitting your query with comma (e.g., <code>str,u8</code> or <code>String,struct:Vec,test</code>)</p></div></div></aside><script>window.rootPath = "../";window.currentCrate = "ejdb";</script><script src="../aliases.js"></script><script src="../main.js"></script><script defer src="../search-index.js"></script></body></html>

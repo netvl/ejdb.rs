@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Error","The main error type used in the library."]],"struct":[["PartialSave","A partial save error returned by `Collection::save_all()` method."]],"type":[["Result","The default result type used in this library."]]});

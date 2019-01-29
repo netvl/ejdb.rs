@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["DatabaseOpenMode","Several bit flags defining how an EJDB database should be opened."]]});
