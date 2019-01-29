@@ -6,20 +6,28 @@ pub trait BsonNumber {
 
 impl BsonNumber for f32 {
     #[inline]
-    fn to_bson(self) -> Bson { Bson::FloatingPoint(self as f64) }
+    fn to_bson(self) -> Bson {
+        Bson::FloatingPoint(self as f64)
+    }
 }
 
 impl BsonNumber for f64 {
     #[inline]
-    fn to_bson(self) -> Bson { Bson::FloatingPoint(self) }
+    fn to_bson(self) -> Bson {
+        Bson::FloatingPoint(self)
+    }
 }
 
 impl BsonNumber for i32 {
     #[inline]
-    fn to_bson(self) -> Bson { Bson::I32(self) }
+    fn to_bson(self) -> Bson {
+        Bson::I32(self)
+    }
 }
 
 impl BsonNumber for i64 {
     #[inline]
-    fn to_bson(self) -> Bson { Bson::I64(self) }
+    fn to_bson(self) -> Bson {
+        Bson::I64(self)
+    }
 }

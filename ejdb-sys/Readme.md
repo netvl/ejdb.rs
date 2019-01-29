@@ -9,11 +9,11 @@ Add a dependency in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ejdb-sys = "0.1"
+ejdb-sys = "0.3"
 ```
+To compile you need to have `cmake` installaled along with `gcc` and `clang`. 
+In runtime you need to have `gzlib` installed and available through pkg-config (almost all distros have it preinstalled).
 
-You need to have `libejdb` installed and available through pkg-config in order for this package
-to build correctly.
 
 Note, however, that you usually don't need to depend on this crate directly; use `ejdb`
 library instead. Therefore, no compatibility guarantees are given.

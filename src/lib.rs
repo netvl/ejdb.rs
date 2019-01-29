@@ -214,20 +214,20 @@ extern crate bitflags;
 #[macro_use]
 extern crate quick_error;
 pub extern crate bson as bson_crate;
-extern crate itertools;
 pub extern crate ejdb_sys;
+extern crate itertools;
 extern crate libc;
 
 /// A reexport of `bson` crate used by this crate in public interface.
 pub use bson_crate as bson;
 
-pub use database::{Database, Collection, CollectionOptions, PreparedQuery, QueryResult};
+pub use database::indices::Index;
+pub use database::meta;
 pub use database::open_mode::{self, DatabaseOpenMode};
 pub use database::query;
-pub use database::meta;
 pub use database::tx::Transaction;
-pub use database::indices::Index;
-pub use types::{Result, Error};
+pub use database::{Collection, CollectionOptions, Database, PreparedQuery, QueryResult};
+pub use types::{Error, Result};
 
 #[macro_use]
 mod macros;
