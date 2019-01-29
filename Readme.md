@@ -35,7 +35,8 @@ To build the library, you need to have `cmake` installaled along with `gcc` and 
 ## Changelog
 
 ### Version 0.4.0
-* Link ejdb statically
+
+* Switched to manual compilation and linking of ejdb statically.
 
 ### Version 0.3.0
 
