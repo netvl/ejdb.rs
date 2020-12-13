@@ -1,6 +1,12 @@
 ejdb.rs, high-level bindings for Embedded JSON Database engine
 ==============================================================
 
+### Unmaintained
+
+I no longer have a capacity to maintain this project. Feel free to reach out if you want to continue its development and take its name on crates.io.
+
+---
+
 [![Build Status][travis]](https://travis-ci.org/netvl/ejdb.rs) [![crates.io][crates]](https://crates.io/crates/ejdb)
 
   [travis]: https://img.shields.io/travis/netvl/ejdb.rs.svg?style=flat-square
