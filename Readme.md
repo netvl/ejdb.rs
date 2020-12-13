@@ -7,7 +7,7 @@ I no longer have a capacity to maintain this project. Feel free to reach out if 
 
 ---
 
-[![Build Status][travis]](https://travis-ci.org/netvl/ejdb.rs) [![crates.io][crates]](https://crates.io/crates/ejdb)
+![Maintenance](https://img.shields.io/badge/maintentance-looking--for--maintainers-yellow?style=flat-square) [![Build Status][travis]](https://travis-ci.org/netvl/ejdb.rs) [![crates.io][crates]](https://crates.io/crates/ejdb)
 
   [travis]: https://img.shields.io/travis/netvl/ejdb.rs.svg?style=flat-square
   [crates]: https://img.shields.io/crates/v/ejdb.svg?style=flat-square
