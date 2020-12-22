@@ -7,12 +7,16 @@ I no longer have a capacity to maintain this project. Feel free to reach out if 
 
 ---
 
-![Maintenance](https://img.shields.io/badge/maintentance-looking--for--maintainers-yellow?style=flat-square) [![Build Status][travis]](https://travis-ci.org/netvl/ejdb.rs) [![crates.io][crates]](https://crates.io/crates/ejdb)
+![Maintenance](https://img.shields.io/badge/maintentance-looking--for--maintainers-yellow?style=flat-square)
+[![Build Status][actions]](https://github.com/netvl/ejdb.rs/actions?query=workflow%3ACI)
+[![crates.io][crates]](https://crates.io/crates/ejdb)
+[![ejdb docs][docs-ejdb]](https://docs.rs/ejdb)
+[![ejdb-sys docs][docs-ejdb-sys]](https://docs.rs/ejdb-sys)
 
-  [travis]: https://img.shields.io/travis/netvl/ejdb.rs.svg?style=flat-square
+  [actions]: https://img.shields.io/github/workflow/status/netvl/ejdb.rs/CI/master?style=flat-square
   [crates]: https://img.shields.io/crates/v/ejdb.svg?style=flat-square
-
-[Documentation](https://netvl.github.io/ejdb.rs/)
+  [docs-ejdb]: https://img.shields.io/badge/docs-ejdb-6495ed.svg?style=flat-square
+  [docs-ejdb-sys]: https://img.shields.io/badge/docs-ejdb--sys-6495ed.svg?style=flat-square
 
 This library provides high-level bindings to [EJDB], an Embedded JSON Database engine.
 
